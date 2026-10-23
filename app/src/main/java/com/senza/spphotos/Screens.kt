@@ -348,8 +348,10 @@ fun SearchScreen(
     }
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
 
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    BackdropScrollPause({ gridState.isScrollInProgress }, vm.blurScroll)
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize().backdropSource(),
+        state = gridState, columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize().backdropSource(),
         contentPadding = PaddingValues(bottom = 130.dp),
         horizontalArrangement = Arrangement.spacedBy(1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {

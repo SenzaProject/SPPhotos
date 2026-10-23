@@ -466,7 +466,6 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
     var trimming by remember { mutableStateOf(false) }
     var showPicker by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
-    var showPro by remember { mutableStateOf(false) }
     var exportShort by remember { mutableIntStateOf(1080) }
     var exporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
@@ -699,17 +698,6 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
             ) {
                 Icon(Icons.Rounded.Close, "Tutup", Modifier.size(28.dp).clickable(onClick = onClose))
                 Spacer(Modifier.weight(1f))
-                Row(
-                    Modifier.clip(RoundedCornerShape(8.dp))
-                        .background(if (vm.pro) Color(0xFF3A2E00) else Color(0xFF2C2C30))
-                        .clickable { showPro = true }.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Rounded.Star, null, tint = Color(0xFFFFD60A), modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (vm.pro) "Pro" else "Pro?", fontSize = 12.sp, color = Color(0xFFFFD60A), fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.width(10.dp))
                 Box(
                     Modifier.clip(RoundedCornerShape(8.dp)).background(CapCyan)
                         .clickable { if (clips.isEmpty()) toast("Timeline kosong") else showExport = true }
@@ -739,12 +727,7 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                         onDragStart = { snapshot() },
                         onMove = { id, dx, dy -> updateLayer(id) { it.copy(x = (it.x + dx).coerceIn(0f, 1f), y = (it.y + dy).coerceIn(0f, 1f)) } }
                     )
-                    if (!vm.pro) {
-                        Box(
-                            Modifier.align(Alignment.BottomEnd).padding(8.dp).clip(RoundedCornerShape(50))
-                                .background(Color.Black.copy(0.45f)).padding(horizontal = 9.dp, vertical = 3.dp)
-                        ) { Text("SP", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    }
+
                 }
                 if (clips.isEmpty()) Text("Timeline kosong — tekan +", color = Color.White.copy(0.6f))
             }
@@ -979,8 +962,6 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
         }
     }
 
-    if (showPro) ProDialog(vm) { showPro = false }
-
     if (showPicker) {
         val videos = remember(vm.media) { vm.media.filter { it.isVideo } }
         AlertDialog(
@@ -1021,11 +1002,6 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                             }
                         }
                         Text("Resolusi yang abu-abu tidak didukung encoder perangkat ini. Menaikkan resolusi tidak menambah detail, dan 4K+ butuh waktu & memori besar.", fontSize = 11.sp)
-                        if (vm.pro) Text("✓ SP Pro — tanpa watermark.", fontSize = 12.sp)
-                        else {
-                            Text("Watermark SP akan ditambahkan.", fontSize = 12.sp)
-                            TextButton(onClick = { showPro = true }) { Text("Hilangkan watermark (SP Pro)") }
-                        }
                         Text("Durasi ${fmtT(total)} · disimpan ke Movies/SP Photos", fontSize = 12.sp)
                     } else {
                         LinearProgressIndicator(progress = { exportProgress }, modifier = Modifier.fillMaxWidth())
@@ -1039,12 +1015,11 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                     exportProgress = 0f
                     playing = false
                     scope.launch {
-                        if (vm.pro) { Pro.revalidate(ctx, force = true); vm.syncPro() }
                         val short = if (resolutionSupported(exportShort, vidAspect)) exportShort else 1080
                         val out = File(ctx.cacheDir, "export_${System.currentTimeMillis()}.mp4")
                         val plan = buildExportPlan(
                             ctx, clips.toList(), layers.map { it.copy(endMs = min(it.endMs, total)) },
-                            adj, short, vidAspect, watermark = !vm.pro
+                            adj, short, vidAspect
                         )
                         val error = suspendCancellableCoroutine<Throwable?> { cont ->
                             val b = Transformer.Builder(ctx)

@@ -165,20 +165,20 @@ fun LibraryScreen(
     val cols = vm.columns
     val bg = MaterialTheme.colorScheme.background
     var menu by remember { mutableStateOf(false) }
-    val subtitle by remember(items) {
-        derivedStateOf {
-            val first = state.firstVisibleItemIndex
-            if (first == 0 && state.firstVisibleItemScrollOffset < 40) {
-                "${NumberFormat.getInstance().format(items.size)} Items"
-            } else {
-                val vis = state.layoutInfo.visibleItemsInfo
-                val a = vis.firstOrNull()?.let { items.getOrNull(it.index) }
-                val b = vis.lastOrNull()?.let { items.getOrNull(it.index) }
-                if (a == null || b == null) "${NumberFormat.getInstance().format(items.size)} Items"
-                else rangeLabel(minOf(a.dateMs, b.dateMs), maxOf(a.dateMs, b.dateMs))
-            }
+    // Subtitle hanya dihitung ulang saat baris pertama berganti (bukan tiap frame scroll)
+    val firstIdx by remember { derivedStateOf { state.firstVisibleItemIndex } }
+    val atTop by remember { derivedStateOf { state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 40 } }
+    val subtitle = remember(items, firstIdx, atTop, cols) {
+        val total = "${NumberFormat.getInstance().format(items.size)} Items"
+        if (atTop || items.isEmpty()) total
+        else {
+            val a = items.getOrNull(firstIdx)
+            val b = items.getOrNull(minOf(firstIdx + cols * 8, items.lastIndex))
+            if (a == null || b == null) total
+            else rangeLabel(minOf(a.dateMs, b.dateMs), maxOf(a.dateMs, b.dateMs))
         }
     }
+    BackdropScrollPause({ state.isScrollInProgress }, vm.blurScroll)
 
     Box(Modifier.fillMaxSize()) {
         if (mode == 2) {

@@ -11,13 +11,8 @@ android {
         applicationId = "com.senza.spphotos"
         minSdk = 29
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.6"
-        // Diisi dari GitHub Secrets (TG_BOT_TOKEN, TG_BOT_USERNAME) saat build; kosong = verifikasi belum aktif
-        val tgToken = System.getenv("TG_BOT_TOKEN") ?: ""
-        val tgBot = System.getenv("TG_BOT_USERNAME") ?: ""
-        buildConfigField("String", "TG_BOT_TOKEN", "\"$tgToken\"")
-        buildConfigField("String", "TG_BOT_USERNAME", "\"$tgBot\"")
+        versionCode = 8
+        versionName = "1.7"
     }
 
     // Keystore tetap (ikut di repo) supaya tanda tangan APK selalu sama di setiap build

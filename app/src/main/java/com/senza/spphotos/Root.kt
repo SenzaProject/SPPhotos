@@ -11,6 +11,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.provider.Settings
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -113,8 +119,61 @@ private fun EnterAnim(reduce: Boolean, content: @Composable () -> Unit) {
     ) { Box(Modifier.fillMaxSize()) { content() } }
 }
 
+/** Media dari URI luar MediaStore (mis. FileProvider aplikasi lain). */
+fun adhocMedia(ctx: Context, uri: Uri): Media {
+    var name = uri.lastPathSegment ?: "media"
+    var size = 0L
+    try {
+        ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                c.getString(0)?.let { name = it }
+                size = c.getLong(1)
+            }
+        }
+    } catch (_: Exception) {
+    }
+    val lower = name.lowercase()
+    val mime = ctx.contentResolver.getType(uri)
+        ?: if (lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".webm") || lower.endsWith(".3gp")) "video/*" else "image/*"
+    val now = System.currentTimeMillis()
+    return Media(0L, uri, name, mime, now, now, size, 0, 0, "", 0L)
+}
+
+fun isDefaultGallery(ctx: Context): Boolean = try {
+    val i = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/images/media/1"), "image/*")
+    ctx.packageManager.resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == ctx.packageName
+} catch (_: Exception) {
+    false
+}
+
+/** Memicu dialog "Buka dengan" sistem: pilih SP Photos lalu "Selalu". */
+fun openAsDefault(ctx: Context, sample: Uri?) {
+    try {
+        val u = sample ?: Uri.parse("content://media/external/images/media/1")
+        ctx.startActivity(
+            Intent(Intent.ACTION_VIEW).setDataAndType(u, "image/*")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    } catch (_: Exception) {
+        Toast.makeText(ctx, "Tidak bisa membuka dialog pemilihan aplikasi", Toast.LENGTH_SHORT).show()
+    }
+}
+
+fun openDefaultAppsSettings(ctx: Context) {
+    try {
+        ctx.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: Exception) {
+        try { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+    }
+}
+
 @Composable
-fun SPPhotosRoot(vm: GalleryVM) {
+fun SPPhotosRoot(
+    vm: GalleryVM,
+    req: LaunchRequest = LaunchRequest(),
+    onPick: (List<Uri>) -> Unit = {},
+    onExit: () -> Unit = {}
+) {
     val ctx = LocalContext.current
     val activity = ctx as ComponentActivity
 
@@ -142,7 +201,18 @@ fun SPPhotosRoot(vm: GalleryVM) {
     var albumDialog by remember { mutableStateOf(false) }
     var newAlbumDialog by remember { mutableStateOf(false) }
 
-    fun pop() { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
+    val externalMode = req.mode == LaunchRequest.VIEW || req.mode == LaunchRequest.EDIT
+    val pickMode = req.mode == LaunchRequest.PICK
+    var opened by remember(req) { mutableStateOf(false) }
+    fun pop() {
+        if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
+        if (stack.isEmpty() && externalMode && opened) onExit()
+    }
+    fun safe(block: () -> Unit) {
+        try { block() } catch (e: Exception) {
+            Toast.makeText(ctx, "Item ini tidak bisa diproses dari sini", Toast.LENGTH_SHORT).show()
+        }
+    }
     fun endSelect() { selecting = false; selected = emptySet() }
     fun toggle(m: Media) { selected = if (m.key in selected) selected - m.key else selected + m.key }
     fun selectedMedia(): List<Media> = vm.media.filter { it.key in selected }
@@ -159,7 +229,7 @@ fun SPPhotosRoot(vm: GalleryVM) {
     }
     fun trash(list: List<Media>) {
         if (Build.VERSION.SDK_INT >= 30) {
-            launchRequest(MediaStore.createTrashRequest(ctx.contentResolver, list.map { it.uri }, true))
+            safe { launchRequest(MediaStore.createTrashRequest(ctx.contentResolver, list.map { it.uri }, true)) }
         } else {
             var failed = false
             list.forEach { try { ctx.contentResolver.delete(it.uri, null, null) } catch (e: Exception) { failed = true } }
@@ -169,30 +239,53 @@ fun SPPhotosRoot(vm: GalleryVM) {
     }
     fun restore(list: List<Media>) {
         if (Build.VERSION.SDK_INT >= 30)
-            launchRequest(MediaStore.createTrashRequest(ctx.contentResolver, list.map { it.uri }, false))
+            safe { launchRequest(MediaStore.createTrashRequest(ctx.contentResolver, list.map { it.uri }, false)) }
     }
     fun deleteForever(list: List<Media>) {
         if (Build.VERSION.SDK_INT >= 30)
-            launchRequest(MediaStore.createDeleteRequest(ctx.contentResolver, list.map { it.uri }))
+            safe { launchRequest(MediaStore.createDeleteRequest(ctx.contentResolver, list.map { it.uri })) }
     }
 
     val onTile: (List<Media>, Int) -> Unit = { list, idx ->
-        if (selecting) toggle(list[idx]) else stack.add(Overlay.Viewer(list, idx))
+        if (pickMode) {
+            if (req.multiple) toggle(list[idx]) else onPick(listOf(list[idx].uri))
+        } else if (selecting) toggle(list[idx]) else stack.add(Overlay.Viewer(list, idx))
     }
     val onLong: (Media) -> Unit = { m ->
-        if (!selecting) { selecting = true; selected = setOf(m.key) } else toggle(m)
+        if (pickMode) { if (req.multiple) toggle(m) }
+        else if (!selecting) { selecting = true; selected = setOf(m.key) } else toggle(m)
     }
     val openGrid: (String, (Media) -> Boolean) -> Unit = { t, f -> stack.add(Overlay.Grid(t, f, null)) }
 
-    val libItems = remember(vm.media, vm.favs, filter, sortAdded) {
-        val l = when (filter) {
-            1 -> vm.media.filter { !it.isVideo }
-            2 -> vm.media.filter { it.isVideo }
-            3 -> vm.media.filter { it.key in vm.favs }
+    val libItems = remember(vm.media, vm.favs, filter, sortAdded, req) {
+        val pool = when {
+            req.mode == LaunchRequest.PICK && req.mime?.startsWith("image") == true -> vm.media.filter { !it.isVideo }
+            req.mode == LaunchRequest.PICK && req.mime?.startsWith("video") == true -> vm.media.filter { it.isVideo }
             else -> vm.media
+        }
+        val l = when (filter) {
+            1 -> pool.filter { !it.isVideo }
+            2 -> pool.filter { it.isVideo }
+            3 -> pool.filter { it.key in vm.favs }
+            else -> pool
         }
         if (sortAdded) l.sortedByDescending { it.addedMs } else l
     }
+
+    LaunchedEffect(req, vm.loaded) {
+        if (!externalMode || opened || !vm.loaded) return@LaunchedEffect
+        val u = req.uri ?: return@LaunchedEffect
+        val idx = vm.media.indexOfFirst { it.uri == u }
+        opened = true
+        if (req.mode == LaunchRequest.EDIT) {
+            stack.add(Overlay.Editor(if (idx >= 0) vm.media[idx] else adhocMedia(ctx, u)))
+        } else if (idx >= 0) {
+            stack.add(Overlay.Viewer(vm.media, idx))
+        } else {
+            stack.add(Overlay.Viewer(listOf(adhocMedia(ctx, u)), 0))
+        }
+    }
+    LaunchedEffect(pickMode) { if (pickMode && req.multiple) selecting = true }
 
     BackHandler(enabled = stack.isNotEmpty() || selecting || searching || showSeg || main != 0) {
         when {
@@ -205,7 +298,7 @@ fun SPPhotosRoot(vm: GalleryVM) {
     }
 
     val top = stack.lastOrNull()
-    val showSel = selecting && (top == null || top is Overlay.Grid)
+    val showSel = selecting && (top == null || top is Overlay.Grid) && !pickMode
     val showNav = !selecting && top == null
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -248,6 +341,18 @@ fun SPPhotosRoot(vm: GalleryVM) {
             onSearch = { searching = true; showSeg = false },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+        }
+
+        if (pickMode && req.multiple && top == null) {
+            Glass(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 100.dp),
+                RoundedCornerShape(50)
+            ) {
+                Box(
+                    Modifier.clickable(enabled = selected.isNotEmpty()) { onPick(selectedMedia().map { it.uri }) }
+                        .padding(horizontal = 26.dp, vertical = 13.dp)
+                ) { Text("Pilih (${selected.size})", fontWeight = FontWeight.SemiBold) }
+            }
         }
 
         stack.forEachIndexed { i, o ->
@@ -379,7 +484,6 @@ private fun StatRow(k: String, v: String) {
 
 @Composable
 fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
-    var showPro by remember { mutableStateOf(false) }
     val photos = vm.media.filter { !it.isVideo }
     val videos = vm.media.filter { it.isVideo }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -423,6 +527,16 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
+                            Text("Blur saat scroll")
+                            Text(
+                                "Matikan (disarankan) agar scroll mulus di 90/120 Hz: blur dijeda saat menggulir dan kembali setelah berhenti.",
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
+                            )
+                        }
+                        Switch(checked = vm.blurScroll, onCheckedChange = { vm.updateBlurScroll(it) })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
                             Text("Pembiasan lensa (eksperimental)")
                             Text(
                                 "Lensa membiaskan & memperbesar isi di bawahnya (Android 13+). Jika bermasalah, matikan.",
@@ -449,29 +563,36 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
                 }
             }
             item {
-                SettingCard("SP Pro") {
-                    StatRow("Status", if (vm.pro) "Aktif ✓" else "Belum aktif")
+                val sctx = LocalContext.current
+                var isDefault by remember { mutableStateOf(isDefaultGallery(sctx)) }
+                SettingCard("Galeri default") {
+                    StatRow("Status", if (isDefault) "SP Photos ✓" else "Belum jadi default")
                     Text(
-                        "Gabung grup DAN channel Telegram untuk menghilangkan watermark SP di hasil ekspor video. " +
-                            "Jika keluar dari salah satunya, Pro dicabut.",
+                        "Agar foto & video dari file manager, chat, dan kamera terbuka di SP Photos: tekan \"Jadikan default\", " +
+                            "pilih SP Photos lalu \"Selalu\". Jika yang terbuka aplikasi galeri lain, buka \"Pengaturan\" → " +
+                            "Aplikasi default / Kelola aplikasi → galeri lama → hapus pengaturan default, lalu ulangi.",
                         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
                     )
-                    GlassChip(if (vm.pro) "Periksa ulang" else "Verifikasi SP Pro", false, { showPro = true })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassChip("Jadikan default", false, { openAsDefault(sctx, vm.media.firstOrNull { !it.isVideo }?.uri) })
+                        GlassChip("Pengaturan", false, { openDefaultAppsSettings(sctx) })
+                        GlassChip("Periksa", false, { isDefault = isDefaultGallery(sctx) })
+                    }
                 }
             }
             item {
                 SettingCard("Privasi") {
                     Text(
                         "Foto & video diproses di perangkat. Aplikasi tidak memakai pengenalan wajah dan tidak membaca lokasi foto. " +
-                            "Internet hanya dipakai untuk satu hal: memeriksa keanggotaan grup/channel Telegram untuk SP Pro " +
-                            "(ID Telegram-mu disimpan di perangkat ini). Favorit dan album kustom disimpan lokal.",
+                            "Internet hanya dipakai jika kamu mengunduh font atau stiker tambahan (bisa dipakai offline setelah diunduh). " +
+                            "Pengenalan teks pada foto berjalan di perangkat. Favorit dan album kustom disimpan lokal.",
                         fontSize = 14.sp
                     )
                 }
             }
             item {
                 SettingCard("Tentang") {
-                    StatRow("SP Photos", "v1.6")
+                    StatRow("SP Photos", "v1.7")
                     Text(
                         "Konsep UI mengacu pada dokumen “iOS 27 Photos · Liquid Glass”. Bukan produk atau tampilan resmi Apple.",
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
@@ -484,5 +605,4 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
             Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp), size = 42
         )
     }
-    if (showPro) ProDialog(vm) { showPro = false }
 }

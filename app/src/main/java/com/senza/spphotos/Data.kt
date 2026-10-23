@@ -170,6 +170,10 @@ class Store(ctx: Context) {
         get() = p.getBoolean("refract", false)
         set(v) { p.edit().putBoolean("refract", v).apply() }
 
+    var blurScroll: Boolean
+        get() = p.getBoolean("blurScroll", false)
+        set(v) { p.edit().putBoolean("blurScroll", v).apply() }
+
     var columns: Int
         get() = p.getInt("columns", 5)
         set(v) { p.edit().putInt("columns", v.coerceIn(2, 8)).apply() }
@@ -184,7 +188,6 @@ class GalleryVM(app: Application) : AndroidViewModel(app) {
     var favs by mutableStateOf(store.favorites()); private set
     var albums by mutableStateOf<Map<String, Set<Long>>>(store.albums()); private set
     var recents by mutableStateOf(store.recents); private set
-    var pro by mutableStateOf(Pro.isPro(app)); private set
 
     var glass by mutableFloatStateOf(store.glass); private set
     var reduce by mutableStateOf(store.reduce); private set
@@ -192,18 +195,9 @@ class GalleryVM(app: Application) : AndroidViewModel(app) {
     var columns by mutableIntStateOf(store.columns); private set
     var blurOn by mutableStateOf(store.blur); private set
     var refractOn by mutableStateOf(store.refract); private set
-
-    fun syncPro() { pro = Pro.isPro(getApplication()) }
-
-    fun revalidatePro() {
-        viewModelScope.launch {
-            Pro.revalidate(getApplication())
-            syncPro()
-        }
-    }
+    var blurScroll by mutableStateOf(store.blurScroll); private set
 
     fun load() {
-        revalidatePro()
         viewModelScope.launch {
             val app = getApplication<Application>()
             val l = withContext(Dispatchers.IO) { MediaRepo.load(app) }
@@ -271,6 +265,7 @@ class GalleryVM(app: Application) : AndroidViewModel(app) {
     fun updateReduce(v: Boolean) { reduce = v; store.reduce = v }
     fun updateBlur(v: Boolean) { blurOn = v; store.blur = v }
     fun updateRefract(v: Boolean) { refractOn = v; store.refract = v }
+    fun updateBlurScroll(v: Boolean) { blurScroll = v; store.blurScroll = v }
     fun updateTheme(v: Int) { theme = v; store.theme = v }
     fun updateColumns(v: Int) { val c = v.coerceIn(2, 8); columns = c; store.columns = c }
 }

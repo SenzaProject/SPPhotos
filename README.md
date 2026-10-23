@@ -94,22 +94,27 @@ ke Movies/SP Photos. Teks, audio/musik, stiker, transisi, keyframe: belum (Fase 
 
 ## v1.6
 
-- **Editor video**: anti-freeze (playhead tidak lagi menggambar ulang seluruh layar, seek di-throttle, playlist tidak dibangun ulang saat trim, thumbnail di-cache per detik),
-  layer teks & stiker (14 font, ukuran, warna, latar, posisi digeser di pratinjau, durasi diatur di timeline),
-  transisi di titik potong (Fade Hitam/Putih, Zoom In/Out, Geser, Putar — terlihat di hasil ekspor),
-  ekspor 480P–8K (opsi yang tidak didukung encoder perangkat dinonaktifkan), watermark "SP" di hasil ekspor
-- **SP Pro**: watermark dihapus jika bergabung di grup DAN channel Telegram; keluar dari salah satunya = Pro dicabut saat pemeriksaan berikutnya
+- **Editor video**: anti-freeze, layer teks & stiker (14 font), transisi di titik potong, ekspor 480P–8K
+  (opsi yang tidak didukung encoder perangkat dinonaktifkan).
 
-### Setup bot verifikasi Telegram (wajib agar SP Pro berfungsi)
-1. Chat **@BotFather** → `/newbot` → catat **token** dan **username** bot (tanpa @).
-2. Jadikan bot **admin** di grup `@senzaportdiscussion` dan channel `@senzaproject` (tanpa izin khusus; hanya agar bisa membaca daftar anggota).
-3. Di GitHub: repo → Settings → Secrets and variables → Actions → New repository secret:
-   - `TG_BOT_TOKEN` = token bot
-   - `TG_BOT_USERNAME` = username bot (tanpa @)
-4. Push ulang / jalankan workflow → APK hasil build sudah memuat konfigurasi bot.
+## v1.7
 
-Catatan keamanan: token bot ikut tertanam di APK (bisa diekstrak orang yang membongkar APK) dan pemeriksaan berjalan di sisi aplikasi,
-jadi bisa dibobol dengan modifikasi APK. Untuk keamanan sungguhan, pindahkan pemeriksaan ke server kecil (mis. Cloudflare Worker).
+- **Watermark dihapus** dari hasil ekspor. Fitur SP Pro/verifikasi Telegram ikut dihapus (tidak ada lagi yang perlu dibuka),
+  termasuk token bot di build.
+- **Galeri default**: SP Photos kini terdaftar sebagai Galeri (`APP_GALLERY`), pembuka foto/video (`VIEW`), tinjau hasil kamera
+  (`REVIEW`), editor (`EDIT`), dan pemilih foto/video untuk aplikasi lain (`PICK` / `GET_CONTENT`, termasuk pilih banyak).
+  Membuka foto dari aplikasi lain langsung tampil di viewer; saat ditutup kembali ke aplikasi pemanggil.
+  Settings → *Galeri default* menampilkan status dan tombol untuk menjadikannya default.
+- **Refresh rate**: jika layar sedang di 90/120 Hz, aplikasi meminta mode tertinggi pada resolusi yang sama
+  (sistem tetap membatasi sesuai pengaturan layar; di 60 Hz tidak ada permintaan).
+- **Scroll lebih mulus**: blur dijeda saat menggulir (kembali halus setelah berhenti; bisa diaktifkan di Settings → *Blur saat scroll*),
+  subtitle Library tidak dihitung tiap frame.
 
-### Belum ada
-Penjernih/denoise video dan stabilizer (butuh mesin pemrosesan khusus: shader GL/FFmpeg/OpenCV), audio/musik, PiP overlay video.
+### Cara menjadikan SP Photos galeri default
+1. Settings → Galeri default → **Jadikan default** → pilih SP Photos → **Selalu**.
+2. Jika yang terbuka aplikasi lain: buka **Pengaturan** → Aplikasi default / Kelola aplikasi → galeri lama → hapus pengaturan default, lalu ulangi langkah 1.
+3. Tekan **Periksa** untuk melihat statusnya.
+
+### Direncanakan berikutnya
+Detail (pertajam, noise, penghalus), warna ala Lightroom (HSL, color grading, tone curve, periset), latar transparan,
+salin teks dari foto (tahan 2 detik), serta teks/stiker/bingkai/gambar di editor foto.

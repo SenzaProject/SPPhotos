@@ -21,9 +21,6 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        env:
-          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_BOT_USERNAME: ${{ secrets.TG_BOT_USERNAME }}
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4

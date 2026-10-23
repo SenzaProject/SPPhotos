@@ -153,23 +153,106 @@ private fun CrashDialog() {
     )
 }
 
+/** Cara aplikasi dibuka: biasa, melihat 1 media (VIEW), mengedit (EDIT), atau sebagai pemilih (PICK). */
+class LaunchRequest(
+    val mode: Int = NORMAL,
+    val uri: Uri? = null,
+    val multiple: Boolean = false,
+    val mime: String? = null
+) {
+    companion object {
+        const val NORMAL = 0
+        const val VIEW = 1
+        const val PICK = 2
+        const val EDIT = 3
+    }
+}
+
+private fun parseLaunch(i: Intent?): LaunchRequest {
+    if (i == null) return LaunchRequest()
+    return when (i.action) {
+        Intent.ACTION_VIEW,
+        "com.android.camera.action.REVIEW",
+        "android.provider.action.REVIEW",
+        "android.provider.action.REVIEW_SECURE" ->
+            if (i.data != null) LaunchRequest(LaunchRequest.VIEW, i.data, mime = i.type) else LaunchRequest()
+        Intent.ACTION_EDIT ->
+            if (i.data != null) LaunchRequest(LaunchRequest.EDIT, i.data, mime = i.type) else LaunchRequest()
+        Intent.ACTION_PICK, Intent.ACTION_GET_CONTENT ->
+            LaunchRequest(
+                LaunchRequest.PICK, null,
+                multiple = i.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false), mime = i.type
+            )
+        else -> LaunchRequest()
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private val vm: GalleryVM by viewModels()
+    private var request by mutableStateOf(LaunchRequest())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        request = parseLaunch(intent)
+        applyRefreshRate()
         setContent {
             SPTheme(vm) {
-                PermissionGate { SPPhotosRoot(vm) }
+                val req = request
+                PermissionGate(bypass = req.mode == LaunchRequest.VIEW || req.mode == LaunchRequest.EDIT) {
+                    SPPhotosRoot(vm, req, onPick = { returnPick(it) }, onExit = { finish() })
+                }
                 CrashDialog()
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        request = parseLaunch(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyRefreshRate()
+    }
+
+    /**
+     * Ikuti refresh rate layar: jika layar sedang di mode tinggi (90/120 Hz) minta mode tertinggi
+     * pada resolusi yang sama agar scroll tidak diturunkan ke 60 Hz. Sistem tetap membatasi sesuai
+     * pengaturan "Kecepatan refresh" yang dipilih pengguna; jika pengguna memilih 60 Hz, tidak ada permintaan.
+     */
+    private fun applyRefreshRate() {
+        try {
+            val d = if (Build.VERSION.SDK_INT >= 30) display else @Suppress("DEPRECATION") windowManager.defaultDisplay
+            if (d == null) return
+            val cur = d.mode
+            if (d.refreshRate < 89f) return
+            val best = d.supportedModes
+                .filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }
+                .maxByOrNull { it.refreshRate } ?: return
+            val lp = window.attributes
+            lp.preferredDisplayModeId = best.modeId
+            window.attributes = lp
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun returnPick(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val r = Intent().addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val cd = android.content.ClipData.newUri(contentResolver, "media", uris[0])
+        uris.drop(1).forEach { cd.addItem(android.content.ClipData.Item(it)) }
+        r.clipData = cd
+        if (uris.size == 1) r.data = uris[0]
+        setResult(RESULT_OK, r)
+        finish()
+    }
 }
 
 @Composable
-private fun PermissionGate(content: @Composable () -> Unit) {
+private fun PermissionGate(bypass: Boolean = false, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val perms = remember {
         if (Build.VERSION.SDK_INT >= 33)
@@ -181,9 +264,9 @@ private fun PermissionGate(content: @Composable () -> Unit) {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         granted = has()
     }
-    LaunchedEffect(Unit) { if (!granted) launcher.launch(perms) }
+    LaunchedEffect(Unit) { if (!granted && !bypass) launcher.launch(perms) }
 
-    if (granted) {
+    if (granted || bypass) {
         content()
     } else {
         Column(

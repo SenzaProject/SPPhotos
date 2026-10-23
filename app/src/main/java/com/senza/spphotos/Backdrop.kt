@@ -6,7 +6,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,6 +69,8 @@ class BackdropRegion(
 )
 
 class BackdropState(val source: GraphicsLayer) {
+    /** 1 = blur penuh, 0 = dijeda (mis. saat scroll cepat) → konten digambar langsung, tanpa rekam ulang. */
+    var level by mutableFloatStateOf(1f)
     var origin by mutableStateOf(Offset.Zero)
     val regions = mutableStateMapOf<Any, BackdropRegion>()
 }
@@ -76,12 +84,17 @@ fun Modifier.backdropSource(): Modifier {
     return this
         .onGloballyPositioned { st.origin = it.positionInRoot() }
         .drawWithContent {
+            val lv = st.level
+            if (lv < 0.02f) {
+                drawContent()
+                return@drawWithContent
+            }
             st.source.record(this, layoutDirection, size.toIntSize()) {
                 this@drawWithContent.drawContent()
             }
             drawLayer(st.source)
             val o = st.origin
-            for (r in st.regions.values) drawRegion(st.source, o, r)
+            for (r in st.regions.values) drawRegion(st.source, o, r, lv)
         }
 }
 
@@ -103,7 +116,7 @@ fun Modifier.backdropRegion(
     }
 }
 
-private fun DrawScope.drawRegion(src: GraphicsLayer, origin: Offset, r: BackdropRegion) {
+private fun DrawScope.drawRegion(src: GraphicsLayer, origin: Offset, r: BackdropRegion, alpha: Float) {
     val left = r.bounds.left - origin.x
     val top = r.bounds.top - origin.y
     val w = r.bounds.width
@@ -114,6 +127,7 @@ private fun DrawScope.drawRegion(src: GraphicsLayer, origin: Offset, r: Backdrop
     val lh = max(1, (h * s).roundToInt())
     val layer = r.layer
     layer.renderEffect = BlurEffect(r.blurPx * s, r.blurPx * s, TileMode.Clamp)
+    layer.alpha = alpha
     layer.compositingStrategy = CompositingStrategy.Offscreen
     layer.record(this, layoutDirection, IntSize(lw, lh)) {
         scale(s, s, pivot = Offset.Zero) {
@@ -160,5 +174,21 @@ fun ProgressiveBlur(modifier: Modifier = Modifier, fade: Int, scrim: Color) {
                 else Brush.verticalGradient(listOf(Color.Transparent, scrim.copy(alpha = 0.18f), scrim.copy(alpha = 0.50f)))
             )
         )
+    }
+}
+
+/**
+ * Jeda blur saat daftar sedang di-scroll agar frame stabil di refresh rate tinggi (90/120 Hz);
+ * blur muncul lagi dengan halus setelah berhenti. [blurWhileScrolling]=true → blur tetap menyala.
+ */
+@Composable
+fun BackdropScrollPause(scrolling: () -> Boolean, blurWhileScrolling: Boolean) {
+    val st = LocalBackdrop.current ?: return
+    LaunchedEffect(st, blurWhileScrolling) {
+        snapshotFlow { scrolling() }.collectLatest { sc ->
+            val target = if (sc && !blurWhileScrolling) 0f else 1f
+            val a = Animatable(st.level)
+            a.animateTo(target, tween(if (target == 0f) 50 else 240)) { st.level = value }
+        }
     }
 }

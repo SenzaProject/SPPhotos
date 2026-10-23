@@ -189,41 +189,12 @@ private fun transitionEffects(type: Int, isIn: Boolean, durUs: Long, clipLenUs: 
     return list
 }
 
-/** Watermark "SP" (logo bunga + teks) yang diskalakan sesuai tinggi keluaran. */
-fun makeWatermark(ctx: Context, outH: Int): Bitmap {
-    val h = (outH * 0.062f).roundToInt().coerceAtLeast(36)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt()
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textSize = h * 0.52f
-    }
-    val textW = paint.measureText("SP")
-    val iconBox = h * 1.0f
-    val w = (h * 0.25f + iconBox + textW + h * 0.4f).roundToInt()
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-    val c = Canvas(bmp)
-    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x73000000 }
-    c.drawRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), h / 2f, h / 2f, bgPaint)
-    try {
-        val icon = BitmapFactory.decodeResource(ctx.resources, R.drawable.ic_launcher_foreground)
-        val sz = h * 1.5f
-        val left = h * 0.25f + iconBox / 2f - sz / 2f
-        val top = h / 2f - sz / 2f
-        c.drawBitmap(icon, null, RectF(left, top, left + sz, top + sz), Paint(Paint.FILTER_BITMAP_FLAG))
-    } catch (_: Throwable) {
-    }
-    val fm = paint.fontMetrics
-    c.drawText("SP", h * 0.25f + iconBox + h * 0.05f, h / 2f - (fm.ascent + fm.descent) / 2f, paint)
-    return bmp
-}
-
-/** Overlay semua layer teks/stiker + watermark untuk satu item. [itemStartMs] = awal item di timeline. */
+/** Overlay semua layer teks/stiker untuk satu item. [itemStartMs] = awal item di timeline. */
 private fun overlayEffect(
     ctx: Context,
     layers: List<TLayer>,
     itemStartMs: Long,
-    outH: Int,
-    wm: Bitmap?
+    outH: Int
 ): Effect? {
     val ovs = ArrayList<TextureOverlay>()
     for (L in layers) {
@@ -252,17 +223,6 @@ private fun overlayEffect(
 
             override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = settings
         })
-    }
-    if (wm != null) {
-        ovs.add(
-            BitmapOverlay.createStaticBitmapOverlay(
-                wm,
-                OverlaySettings.Builder()
-                    .setOverlayFrameAnchor(1f, -1f)
-                    .setBackgroundFrameAnchor(0.95f, -0.93f)
-                    .build()
-            )
-        )
     }
     return if (ovs.isEmpty()) null else OverlayEffect(ImmutableList.copyOf(ovs))
 }
@@ -307,11 +267,9 @@ fun buildExportPlan(
     layers: List<TLayer>,
     adj: VAdjust,
     shortSide: Int,
-    aspect: Float,
-    watermark: Boolean
+    aspect: Float
 ): ExportPlan {
     val outH = outHeightFor(shortSide, aspect)
-    val wm = if (watermark) makeWatermark(ctx, outH) else null
     var startMs = 0L
     val items = clips.mapIndexed { i, c ->
         val audio: List<AudioProcessor> =
@@ -329,7 +287,7 @@ fun buildExportPlan(
             video.addAll(transitionEffects(c.trans, false, minOf(c.transMs, c.lenMs / 2, nx.lenMs / 2) * 1000L, lenUs))
         }
         video.add(Presentation.createForHeight(outH))
-        overlayEffect(ctx, layers, startMs, outH, wm)?.let { video.add(it) }
+        overlayEffect(ctx, layers, startMs, outH)?.let { video.add(it) }
         startMs += c.lenMs
         EditedMediaItem.Builder(clipMediaItem(c))
             .setRemoveAudio(c.muted)
