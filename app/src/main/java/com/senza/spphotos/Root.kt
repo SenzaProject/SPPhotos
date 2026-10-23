@@ -6,6 +6,7 @@
 
 package com.senza.spphotos
 
+import androidx.compose.foundation.layout.navigationBarsPadding
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
