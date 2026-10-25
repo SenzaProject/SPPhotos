@@ -80,7 +80,7 @@ fun Modifier.backdropSource(): Modifier {
         .onGloballyPositioned { st.origin = it.positionInRoot() }
         .drawWithContent {
             val lv = st.level
-            if (lv < 0.02f) {
+            if (lv < 0.02f || st.regions.isEmpty()) {
                 drawContent()
                 return@drawWithContent
             }
@@ -158,9 +158,12 @@ private fun DrawScope.drawRegion(src: GraphicsLayer, origin: Offset, r: Backdrop
 @Composable
 fun ProgressiveBlur(modifier: Modifier = Modifier, fade: Int, scrim: Color) {
     Box(modifier) {
-        // dua lapis radius berbeda → transisi halus dari kabur ke tajam (ringan, tetap menyala saat scroll)
-        Box(Modifier.matchParentSize().backdropRegion(26.dp, fade = fade, scale = 0.18f))
-        Box(Modifier.matchParentSize().backdropRegion(9.dp, fade = fade, scale = 0.3f))
+        // Android 13+: blur dikerjakan shader di EdgeBlur.kt (modifier edgeBlur pada grid) → di sini cukup gradasi.
+        // Android 12 ke bawah: dua lapis blur lama sebagai cadangan.
+        if (!edgeBlurShaderSupported) {
+            Box(Modifier.matchParentSize().backdropRegion(26.dp, fade = fade, scale = 0.18f))
+            Box(Modifier.matchParentSize().backdropRegion(9.dp, fade = fade, scale = 0.3f))
+        }
         // gradasi gelap/terang tipis seperti di iOS
         Box(
             Modifier.matchParentSize().background(

@@ -361,7 +361,7 @@ fun SearchScreen(
 
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     LazyVerticalGrid(
-        state = gridState, columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize().backdropSource(),
+        state = gridState, columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize().edgeBlur(0.dp, edgeBottomH()).backdropSource(),
         contentPadding = PaddingValues(bottom = 130.dp),
         horizontalArrangement = Arrangement.spacedBy(1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {

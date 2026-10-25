@@ -170,6 +170,8 @@ fun LibraryScreen(
         HashMap<Any, Int>(items.size * 2).also { m -> items.forEachIndexed { i, it -> m["m${it.key}"] = i } }
     }
     val bg = MaterialTheme.colorScheme.background
+    val topZone = headerTopPadding() + 24.dp
+    val botZone = edgeBottomH()
     var menu by remember { mutableStateOf(false) }
     // Subtitle hanya dihitung ulang saat baris pertama berganti (bukan tiap frame scroll)
     val firstIdx by remember { derivedStateOf { state.firstVisibleItemIndex } }
@@ -189,7 +191,7 @@ fun LibraryScreen(
 
     Box(Modifier.fillMaxSize()) {
         if (mode == 2) {
-            Box(Modifier.fillMaxSize().backdropSource().pinchZoom { fewer -> vm.updateColumns(vm.columns + if (fewer) -1 else 1) }) {
+            Box(Modifier.fillMaxSize().edgeBlur(topZone, botZone).backdropSource().pinchZoom { fewer -> vm.updateColumns(vm.columns + if (fewer) -1 else 1) }) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(cols),
                     state = state,
@@ -226,7 +228,7 @@ fun LibraryScreen(
                 }
             }
         } else {
-            Box(Modifier.fillMaxSize().backdropSource()) {
+            Box(Modifier.fillMaxSize().edgeBlur(topZone, botZone).backdropSource()) {
                 PeriodScreen(vm, byYear = mode == 0, onOpen = onOpenGrid)
             }
         }

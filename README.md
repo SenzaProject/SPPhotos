@@ -128,3 +128,5 @@ salin teks dari foto (tahan 2 detik), serta teks/stiker/bingkai/gambar di editor
 - **Scroll lebih mulus**: thumbnail ukuran tetap (cache stabil), permintaan yang sudah lewat layar dibatalkan,
   thread dibatasi, plus pra-muat thumbnail di depan arah scroll.
 - Logo baru (ikon adaptif + ikon bertema).
+- **Blur progresif via shader (Android 13+)**: satu shader di grid menggeser radius blur menurut posisi (paling kabur di tepi
+  atas & bawah, seperti iOS). Menggantikan sistem rekam-ulang lapisan yang tidak menampilkan blur. Android 12 ke bawah memakai cadangan lama.

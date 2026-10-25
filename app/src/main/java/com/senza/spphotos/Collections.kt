@@ -120,7 +120,7 @@ fun CollectionsScreen(
     var utilOpen by rememberSaveable { mutableStateOf(true) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var menu by remember { mutableStateOf(false) }
-    LazyColumn(Modifier.fillMaxSize().backdropSource(), state = listState, contentPadding = PaddingValues(bottom = 150.dp)) {
+    LazyColumn(Modifier.fillMaxSize().edgeBlur(0.dp, edgeBottomH()).backdropSource(), state = listState, contentPadding = PaddingValues(bottom = 150.dp)) {
         item {
             Row(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
