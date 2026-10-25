@@ -119,7 +119,6 @@ fun CollectionsScreen(
 ) {
     var utilOpen by rememberSaveable { mutableStateOf(true) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    BackdropScrollPause({ listState.isScrollInProgress }, vm.blurScroll)
     var menu by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().backdropSource(), state = listState, contentPadding = PaddingValues(bottom = 150.dp)) {
         item {

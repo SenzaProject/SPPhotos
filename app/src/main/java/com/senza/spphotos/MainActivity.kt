@@ -63,6 +63,8 @@ import coil.size.pxOrElse
 import android.content.Context
 import android.graphics.drawable.BitmapDrawable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 
 /** Kunci cache memori untuk thumbnail Media. */
@@ -70,9 +72,28 @@ class MediaThumbKeyer : Keyer<Media> {
     override fun key(data: Media, options: Options): String = "thumb:${data.key}:${data.dateMs}:${data.size}"
 }
 
+/** Pool thread untuk thumbnail yang sedang terlihat (dibatasi supaya tidak membanjiri I/O). */
+private val visibleThumbPool by lazy {
+    java.util.concurrent.Executors.newFixedThreadPool(4) { r ->
+        Thread(r, "thumb-visible").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 }
+    }.asCoroutineDispatcher()
+}
+
+/** Pool terpisah (1 thread, prioritas rendah) untuk pra-muat di depan arah scroll. */
+private val prefetchThumbPool by lazy {
+    java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "thumb-prefetch").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+    }.asCoroutineDispatcher()
+}
+
+const val PARAM_PREFETCH = "sp_prefetch"
+
 /**
  * Thumbnail cepat lewat MediaStore.loadThumbnail (di-cache sistem) — jauh lebih ringan
  * daripada men-decode foto/video penuh, sehingga scroll jadi mulus dan hemat memori.
+ *
+ * Perbaikan scroll: permintaan yang sudah lewat layar DIBATALKAN (CancellationSignal) dan thread
+ * dibatasi, sehingga foto yang sedang terlihat tidak menunggu antrean thumbnail lama.
  */
 class MediaThumbFetcher(
     private val ctx: Context,
@@ -82,8 +103,15 @@ class MediaThumbFetcher(
     override suspend fun fetch(): FetchResult {
         val w = options.size.width.pxOrElse { 320 }.coerceIn(96, 1024)
         val h = options.size.height.pxOrElse { 320 }.coerceIn(96, 1024)
-        val bmp = withContext(Dispatchers.IO) {
-            ctx.contentResolver.loadThumbnail(media.uri, android.util.Size(w, h), null)
+        val prefetch = options.parameters.value<Boolean>(PARAM_PREFETCH) == true
+        val bmp = withContext(if (prefetch) prefetchThumbPool else visibleThumbPool) {
+            val signal = android.os.CancellationSignal()
+            val reg = coroutineContext[Job]?.invokeOnCompletion { if (it != null) signal.cancel() }
+            try {
+                ctx.contentResolver.loadThumbnail(media.uri, android.util.Size(w, h), signal)
+            } finally {
+                reg?.dispose()
+            }
         }
         return DrawableResult(BitmapDrawable(ctx.resources, bmp), true, DataSource.DISK)
     }
@@ -104,7 +132,7 @@ class SPPhotosApp : Application(), ImageLoaderFactory {
                 val sw = java.io.StringWriter()
                 e.printStackTrace(java.io.PrintWriter(sw))
                 java.io.File(filesDir, "last_crash.txt").writeText(
-                    "SP Photos 1.3 · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n" +
+                    "SP Photos 1.8 · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n" +
                         "Thread: ${t.name}\n\n" + sw.toString()
                 )
             } catch (_: Throwable) {
@@ -120,7 +148,7 @@ class SPPhotosApp : Application(), ImageLoaderFactory {
                 add(MediaThumbFetcher.Factory(this@SPPhotosApp))
                 add(VideoFrameDecoder.Factory())
             }
-            .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.28).build() }
+            .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.35).build() }
             .crossfade(false)
             .respectCacheHeaders(false)
             .build()

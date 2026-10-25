@@ -8,11 +8,6 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,7 +64,7 @@ class BackdropRegion(
 )
 
 class BackdropState(val source: GraphicsLayer) {
-    /** 1 = blur penuh, 0 = dijeda (mis. saat scroll cepat) → konten digambar langsung, tanpa rekam ulang. */
+    /** 1 = blur penuh. (Dulu dijeda saat scroll; sekarang selalu menyala.) */
     var level by mutableFloatStateOf(1f)
     var origin by mutableStateOf(Offset.Zero)
     val regions = mutableStateMapOf<Any, BackdropRegion>()
@@ -163,10 +158,9 @@ private fun DrawScope.drawRegion(src: GraphicsLayer, origin: Offset, r: Backdrop
 @Composable
 fun ProgressiveBlur(modifier: Modifier = Modifier, fade: Int, scrim: Color) {
     Box(modifier) {
-        // tiga lapis dengan radius berbeda → transisi halus dari kabur ke tajam
-        Box(Modifier.matchParentSize().backdropRegion(30.dp, fade = fade, scale = 0.2f))
-        Box(Modifier.matchParentSize().backdropRegion(15.dp, fade = fade, scale = 0.25f))
-        Box(Modifier.matchParentSize().backdropRegion(6.dp, fade = fade, scale = 0.4f))
+        // dua lapis radius berbeda → transisi halus dari kabur ke tajam (ringan, tetap menyala saat scroll)
+        Box(Modifier.matchParentSize().backdropRegion(26.dp, fade = fade, scale = 0.18f))
+        Box(Modifier.matchParentSize().backdropRegion(9.dp, fade = fade, scale = 0.3f))
         // gradasi gelap/terang tipis seperti di iOS
         Box(
             Modifier.matchParentSize().background(
@@ -174,21 +168,5 @@ fun ProgressiveBlur(modifier: Modifier = Modifier, fade: Int, scrim: Color) {
                 else Brush.verticalGradient(listOf(Color.Transparent, scrim.copy(alpha = 0.18f), scrim.copy(alpha = 0.50f)))
             )
         )
-    }
-}
-
-/**
- * Jeda blur saat daftar sedang di-scroll agar frame stabil di refresh rate tinggi (90/120 Hz);
- * blur muncul lagi dengan halus setelah berhenti. [blurWhileScrolling]=true → blur tetap menyala.
- */
-@Composable
-fun BackdropScrollPause(scrolling: () -> Boolean, blurWhileScrolling: Boolean) {
-    val st = LocalBackdrop.current ?: return
-    LaunchedEffect(st, blurWhileScrolling) {
-        snapshotFlow { scrolling() }.collectLatest { sc ->
-            val target = if (sc && !blurWhileScrolling) 0f else 1f
-            val a = Animatable(st.level)
-            a.animateTo(target, tween(if (target == 0f) 50 else 240)) { st.level = value }
-        }
     }
 }

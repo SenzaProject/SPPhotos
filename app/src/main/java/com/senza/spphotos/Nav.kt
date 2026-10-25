@@ -284,7 +284,7 @@ fun LiquidSelector(
                 }
             }
     ) {
-        Glass(Modifier.matchParentSize(), RoundedCornerShape(50)) {}
+        Glass(Modifier.matchParentSize(), RoundedCornerShape(50), behindBlur = true) {}
 
         val baseWpx = slotW
         val baseHpx = heightPx - 2 * padPx
@@ -398,7 +398,8 @@ fun GlassRoundButton(
     )
     Glass(
         modifier.size(size).graphicsLayer { scaleX = sc; scaleY = sc },
-        CircleShape
+        CircleShape,
+        behindBlur = true
     ) {
         Box(
             Modifier.fillMaxSize().clickable(interactionSource = src, indication = null, onClick = onClick),

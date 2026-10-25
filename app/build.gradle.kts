@@ -11,8 +11,8 @@ android {
         applicationId = "com.senza.spphotos"
         minSdk = 29
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
     }
 
     // Keystore tetap (ikut di repo) supaya tanda tangan APK selalu sama di setiap build

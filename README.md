@@ -118,3 +118,13 @@ ke Movies/SP Photos. Teks, audio/musik, stiker, transisi, keyframe: belum (Fase 
 ### Direncanakan berikutnya
 Detail (pertajam, noise, penghalus), warna ala Lightroom (HSL, color grading, tone curve, periset), latar transparan,
 salin teks dari foto (tahan 2 detik), serta teks/stiker/bingkai/gambar di editor foto.
+
+## v1.8
+
+- **Blur atas/bawah selalu tampil**, termasuk saat scroll (sebelumnya dijeda saat scroll sehingga tidak kelihatan).
+  Dibuat lebih ringan: 2 lapis blur per tepi, pil kaca di atas blur tidak membuat lapisan blur sendiri. Opsi "Blur saat scroll" dihapus.
+- **Pilih banyak dengan geser jari** (Library & album): tekan lama lalu geser, atau saat mode Select geser mendatar.
+  Geser ke tepi atas/bawah → scroll otomatis. Mulai dari foto yang sudah terpilih → mode batal pilih.
+- **Scroll lebih mulus**: thumbnail ukuran tetap (cache stabil), permintaan yang sudah lewat layar dibatalkan,
+  thread dibatasi, plus pra-muat thumbnail di depan arah scroll.
+- Logo baru (ikon adaptif + ikon bertema).

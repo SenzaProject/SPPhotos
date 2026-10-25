@@ -258,16 +258,27 @@ fun GridScreen(
     onBack: () -> Unit,
     onToggleSelect: () -> Unit,
     onTile: (List<Media>, Int) -> Unit,
-    onLong: (Media) -> Unit
+    onLong: (Media) -> Unit,
+    onEnterSelect: () -> Unit = {},
+    onSelectedChange: (Set<Long>) -> Unit = {}
 ) {
     val state = rememberLazyGridState()
+    val indexByKey = remember(items) {
+        HashMap<Any, Int>(items.size * 2).also { m -> items.forEachIndexed { i, it -> m["g${it.key}"] = i } }
+    }
+    ThumbPrefetch(state, items, { k -> indexByKey[k] ?: -1 })
     var menu by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
         .pinchZoom { fewer -> vm.updateColumns(vm.columns + if (fewer) -1 else 1) }) {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(vm.columns), state = state, modifier = Modifier.fillMaxSize(),
+            columns = GridCells.Fixed(vm.columns), state = state,
+            modifier = Modifier.fillMaxSize().dragSelect(
+                state = state, items = items, selecting = selecting, selected = selected,
+                indexOf = { k -> indexByKey[k] ?: -1 },
+                onEnterSelect = onEnterSelect, onSelected = onSelectedChange
+            ),
             contentPadding = PaddingValues(bottom = 130.dp),
             horizontalArrangement = Arrangement.spacedBy(1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
@@ -349,7 +360,6 @@ fun SearchScreen(
     val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
 
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-    BackdropScrollPause({ gridState.isScrollInProgress }, vm.blurScroll)
     LazyVerticalGrid(
         state = gridState, columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize().backdropSource(),
         contentPadding = PaddingValues(bottom = 130.dp),

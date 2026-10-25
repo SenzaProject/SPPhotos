@@ -39,6 +39,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +56,9 @@ import androidx.compose.ui.geometry.Offset
 import coil.compose.AsyncImage
 
 val Accent = Color(0xFF0A84FF)
+
+/** Ukuran thumbnail grid (px). Cukup tajam untuk 3–5 kolom, ringan di memori. */
+const val TILE_THUMB_PX = 320
 
 class GlassStyle(
     val intensity: Float,
@@ -97,10 +101,13 @@ fun Glass(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(24.dp),
     blur: Boolean = true,
+    /** true = di belakangnya sudah ada blur progresif (bilah atas/bawah) → tidak perlu lapisan blur sendiri (hemat GPU). */
+    behindBlur: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val g = LocalGlass.current
-    val blurred = blur && g.blur && LocalBackdrop.current != null && !g.reduced
+    val blurred = (blur || behindBlur) && g.blur && LocalBackdrop.current != null && !g.reduced
+    val ownRegion = blur && !behindBlur
     val fg = if (g.dark) Color.White else Color(0xFF111118)
     val fill: Modifier = if (g.reduced) {
         Modifier.background(if (g.dark) Color(0xFF23232C) else Color(0xFFFFFFFF), shape)
@@ -130,7 +137,7 @@ fun Glass(
     Box(
         modifier
             .clip(shape)
-            .then(if (blurred) Modifier.backdropRegion(8.dp, shape, scale = 0.5f) else Modifier)
+            .then(if (blurred && ownRegion) Modifier.backdropRegion(8.dp, shape, scale = 0.4f) else Modifier)
             .then(fill)
             .border(1.dp, edge, shape)
     ) {
@@ -146,9 +153,10 @@ fun GlassIconButton(
     modifier: Modifier = Modifier,
     tint: Color = Color.Unspecified,
     size: Int = 44,
-    blur: Boolean = true
+    blur: Boolean = true,
+    behindBlur: Boolean = false
 ) {
-    Glass(modifier.size(size.dp), CircleShape, blur) {
+    Glass(modifier.size(size.dp), CircleShape, blur, behindBlur) {
         Box(Modifier.fillMaxSize().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
             Icon(icon, desc, tint = if (tint == Color.Unspecified) LocalContentColor.current else tint,
                 modifier = Modifier.size((size * 0.5f).dp))
@@ -178,14 +186,27 @@ fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mo
     }
 }
 
+/** [fixedPx] > 0 → ukuran permintaan thumbnail tetap (cache stabil, tidak decode ulang tiap layout berubah). */
 @Composable
-fun Thumb(m: Media, modifier: Modifier = Modifier) {
-    AsyncImage(
-        model = m,
-        contentDescription = m.name,
-        contentScale = ContentScale.Crop,
-        modifier = modifier
-    )
+fun Thumb(m: Media, modifier: Modifier = Modifier, fixedPx: Int = 0) {
+    if (fixedPx > 0) {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val req = remember(m.key, m.dateMs, m.size, fixedPx) {
+            coil.request.ImageRequest.Builder(ctx)
+                .data(m)
+                .size(fixedPx)
+                .crossfade(false)
+                .build()
+        }
+        AsyncImage(model = req, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
+    } else {
+        AsyncImage(
+            model = m,
+            contentDescription = m.name,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -206,7 +227,7 @@ fun PhotoTile(
             .background(Color(0x33888888))
             .combinedClickable(onClick = onClick, onLongClick = onLong)
     ) {
-        Thumb(m, Modifier.fillMaxSize())
+        Thumb(m, Modifier.fillMaxSize(), fixedPx = TILE_THUMB_PX)
         if (m.isVideo) {
             Text(
                 formatDuration(m.durationMs), color = Color.White, fontSize = 12.sp,

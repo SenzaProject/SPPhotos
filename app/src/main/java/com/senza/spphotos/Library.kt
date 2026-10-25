@@ -160,9 +160,15 @@ fun LibraryScreen(
     onToggleSelect: () -> Unit,
     onTile: (List<Media>, Int) -> Unit,
     onLong: (Media) -> Unit,
-    onOpenGrid: (String, (Media) -> Boolean) -> Unit
+    onOpenGrid: (String, (Media) -> Boolean) -> Unit,
+    onEnterSelect: () -> Unit = {},
+    onSelectedChange: (Set<Long>) -> Unit = {}
 ) {
     val cols = vm.columns
+    // key item grid ("m<key>") → indeks di daftar, dipakai drag-select
+    val indexByKey = remember(items) {
+        HashMap<Any, Int>(items.size * 2).also { m -> items.forEachIndexed { i, it -> m["m${it.key}"] = i } }
+    }
     val bg = MaterialTheme.colorScheme.background
     var menu by remember { mutableStateOf(false) }
     // Subtitle hanya dihitung ulang saat baris pertama berganti (bukan tiap frame scroll)
@@ -178,7 +184,8 @@ fun LibraryScreen(
             else rangeLabel(minOf(a.dateMs, b.dateMs), maxOf(a.dateMs, b.dateMs))
         }
     }
-    BackdropScrollPause({ state.isScrollInProgress }, vm.blurScroll)
+
+    if (mode == 2) ThumbPrefetch(state, items, { k -> indexByKey[k] ?: -1 })
 
     Box(Modifier.fillMaxSize()) {
         if (mode == 2) {
@@ -186,7 +193,11 @@ fun LibraryScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(cols),
                     state = state,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().dragSelect(
+                        state = state, items = items, selecting = selecting, selected = selected,
+                        indexOf = { k -> indexByKey[k] ?: -1 },
+                        onEnterSelect = onEnterSelect, onSelected = onSelectedChange
+                    ),
                     contentPadding = PaddingValues(top = headerTopPadding(), bottom = 150.dp),
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                     verticalArrangement = Arrangement.spacedBy(1.dp)
@@ -238,7 +249,7 @@ fun LibraryScreen(
                     )
                 }
                 Box {
-                    GlassIconButton(Icons.Rounded.FilterList, "Sort & filter", { menu = true }, size = 48)
+                    GlassIconButton(Icons.Rounded.FilterList, "Sort & filter", { menu = true }, size = 48, behindBlur = true)
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
                             text = { Text(if (!sortAdded) "✓ Urut: tanggal diambil" else "Urut: tanggal diambil") },
@@ -253,7 +264,7 @@ fun LibraryScreen(
                         }
                     }
                 }
-                Glass(Modifier.height(48.dp), RoundedCornerShape(50)) {
+                Glass(Modifier.height(48.dp), RoundedCornerShape(50), behindBlur = true) {
                     Box(
                         Modifier.clickable(onClick = onToggleSelect).padding(horizontal = 24.dp).height(48.dp),
                         contentAlignment = Alignment.Center

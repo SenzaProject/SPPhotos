@@ -309,7 +309,9 @@ fun SPPhotosRoot(
             main == 0 -> LibraryScreen(
                 vm, libItems, libState, libMode, selecting, selected, filter, { filter = it }, sortAdded, { sortAdded = it },
                 onToggleSelect = { if (selecting) endSelect() else selecting = true },
-                onTile = onTile, onLong = onLong, onOpenGrid = openGrid
+                onTile = onTile, onLong = onLong, onOpenGrid = openGrid,
+                onEnterSelect = { if (!selecting) selecting = true },
+                onSelectedChange = { selected = it }
             )
             else -> CollectionsScreen(
                 vm,
@@ -366,7 +368,9 @@ fun SPPhotosRoot(
                                 vm, o.title, list, o.album, selecting, selected,
                                 onBack = { if (selecting) endSelect(); pop() },
                                 onToggleSelect = { if (selecting) endSelect() else selecting = true },
-                                onTile = onTile, onLong = onLong
+                                onTile = onTile, onLong = onLong,
+                                onEnterSelect = { if (!selecting) selecting = true },
+                                onSelectedChange = { selected = it }
                             )
                         }
                         is Overlay.Viewer -> ViewerScreen(
@@ -525,16 +529,6 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
                             )
                         }
                         Switch(checked = vm.blurOn, onCheckedChange = { vm.updateBlur(it) })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Blur saat scroll")
-                            Text(
-                                "Matikan (disarankan) agar scroll mulus di 90/120 Hz: blur dijeda saat menggulir dan kembali setelah berhenti.",
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
-                            )
-                        }
-                        Switch(checked = vm.blurScroll, onCheckedChange = { vm.updateBlurScroll(it) })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
