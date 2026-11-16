@@ -139,7 +139,7 @@ Status mengikuti `roadmap.md`:
 |---|---|
 | 0 Audit & baseline | DONE (audit kode; build baseline belum bisa dijalankan di lingkungan ini, lihat catatan) |
 | 1 Rebranding menjadi Photos | DONE (nama aplikasi, label, dialog, teks, folder ekspor baru `Pictures/Photos` & `Movies/Photos`, workflow). `applicationId` dan keystore tidak diubah. |
-| 2 Sistem desain | TODO |
+| 2 Sistem desain | DONE (belum dikompilasi; lihat catatan) — `DesignSystem.kt`: palet terang/gelap, skala tipe, Space/Radius/Motion, komponen SectionHeader/PillButton/GroupedCard; tema Material3 disambung ke token; fallback kaca ringan untuk perangkat RAM rendah |
 | 3 Navigasi & Library | TODO |
 | 4 Collections, Albums, Search | TODO |
 | 5 Viewer | TODO |
@@ -151,3 +151,9 @@ Status mengikuti `roadmap.md`:
 
 Catatan: file hasil ekspor lama di `Pictures/SP Photos` dan `Movies/SP Photos` tidak dipindah/dihapus.
 Ikon peluncur dan splash baru belum dibuat (menunggu aset ikon).
+
+### Sistem desain (Tahap 2)
+- `DesignSystem.kt` adalah sumber token. Pakai `PhotosTheme.colors`, `PhotosType`, `Space`, `Radius`, `Motion` — bukan angka/warna lepas.
+- Font Apple (SF Pro) proprietari, jadi dipakai font sans sistem dengan bobot & tracking yang mirip.
+- Warna destruktif/aksen/favorit sekarang konstanta tunggal (`Destructive`, `Accent`, `FavoritePink`).
+- Warna lepas yang masih tersisa (editor video, filter foto) akan dirapikan di tahap masing-masing (6, 7).

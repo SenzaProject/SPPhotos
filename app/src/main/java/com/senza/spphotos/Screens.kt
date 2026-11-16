@@ -488,8 +488,8 @@ fun TrashScreen(
                         Text(if (sel.isEmpty()) "Pulihkan semua" else "Pulihkan (${target.size})")
                     }
                     TextButton(onClick = { onDeleteForever(target) }) {
-                        Icon(Icons.Rounded.Delete, null, tint = Color(0xFFFF453A)); Spacer(Modifier.size(6.dp))
-                        Text(if (sel.isEmpty()) "Hapus semua" else "Hapus (${target.size})", color = Color(0xFFFF453A))
+                        Icon(Icons.Rounded.Delete, null, tint = Destructive); Spacer(Modifier.size(6.dp))
+                        Text(if (sel.isEmpty()) "Hapus semua" else "Hapus (${target.size})", color = Destructive)
                     }
                 }
             }
@@ -521,7 +521,7 @@ fun SelectionBar(
                 IconBtn(Icons.Rounded.Share, "Bagikan", on, a, onShare)
                 IconBtn(if (allFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Favorit", on, a, onFav)
                 IconBtn(Icons.Rounded.Collections, "Tambah ke album", on, a, onAlbum)
-                IconBtn(Icons.Rounded.Delete, "Hapus", on, a, onDelete, Color(0xFFFF453A))
+                IconBtn(Icons.Rounded.Delete, "Hapus", on, a, onDelete, Destructive)
             }
         }
     }

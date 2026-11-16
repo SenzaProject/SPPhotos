@@ -296,7 +296,7 @@ fun ViewerScreen(
                                 tint = if (fav) Color(0xFFFF375F) else Color.White
                             ) { vm.toggleFav(cur) }
                             BarIcon(Icons.Rounded.Tune, "Edit") { onEdit(cur) }
-                            BarIcon(Icons.Rounded.Delete, "Hapus", tint = Color(0xFFFF453A)) { onDelete(cur) }
+                            BarIcon(Icons.Rounded.Delete, "Hapus", tint = Destructive) { onDelete(cur) }
                         }
                     }
                 }

@@ -55,8 +55,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import coil.compose.AsyncImage
 
-val Accent = Color(0xFF0A84FF)
-
 /** Ukuran thumbnail grid (px). Cukup tajam untuk 3–5 kolom, ringan di memori. */
 const val TILE_THUMB_PX = 320
 
@@ -65,7 +63,9 @@ class GlassStyle(
     val reduced: Boolean,
     val dark: Boolean,
     val blur: Boolean = true,
-    val refract: Boolean = false
+    val refract: Boolean = false,
+    /** true = perangkat RAM rendah → tanpa blur latar berat (fallback ringan). */
+    val lite: Boolean = false
 )
 
 val LocalGlass = compositionLocalOf { GlassStyle(0.6f, false, true) }
@@ -77,16 +77,24 @@ fun SPTheme(vm: GalleryVM, content: @Composable () -> Unit) {
         2 -> true
         else -> isSystemInDarkTheme()
     }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val lite = remember {
+        try {
+            (ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager).isLowRamDevice
+        } catch (e: Throwable) { false }
+    }
+    val pal = if (dark) PhotosDark else PhotosLight
     val scheme = if (dark) darkColorScheme(
-        primary = Accent, background = Color.Black, surface = Color(0xFF1C1C1E),
-        onBackground = Color.White, onSurface = Color.White
+        primary = pal.accent, background = pal.background, surface = pal.surface,
+        onBackground = pal.label, onSurface = pal.label, error = pal.destructive
     ) else lightColorScheme(
-        primary = Accent, background = Color(0xFFF2F2F7), surface = Color.White,
-        onBackground = Color(0xFF111118), onSurface = Color(0xFF111118)
+        primary = pal.accent, background = pal.background, surface = pal.surface,
+        onBackground = pal.label, onSurface = pal.label, error = pal.destructive
     )
-    MaterialTheme(colorScheme = scheme) {
+    MaterialTheme(colorScheme = scheme, typography = photosTypography()) {
         CompositionLocalProvider(
-            LocalGlass provides GlassStyle(vm.glass, vm.reduce, dark, vm.blurOn, vm.refractOn),
+            LocalPalette provides pal,
+            LocalGlass provides GlassStyle(vm.glass, vm.reduce, dark, vm.blurOn, vm.refractOn, lite),
             LocalContentColor provides scheme.onBackground
         ) { content() }
     }
@@ -106,11 +114,11 @@ fun Glass(
     content: @Composable BoxScope.() -> Unit
 ) {
     val g = LocalGlass.current
-    val blurred = (blur || behindBlur) && g.blur && LocalBackdrop.current != null && !g.reduced
+    val blurred = (blur || behindBlur) && g.blur && !g.lite && LocalBackdrop.current != null && !g.reduced
     val ownRegion = blur && !behindBlur
-    val fg = if (g.dark) Color.White else Color(0xFF111118)
+    val fg = PhotosTheme.colors.label
     val fill: Modifier = if (g.reduced) {
-        Modifier.background(if (g.dark) Color(0xFF23232C) else Color(0xFFFFFFFF), shape)
+        Modifier.background(PhotosTheme.colors.glassSolid, shape)
     } else {
         val scrim = if (g.dark) Color.Black.copy(alpha = if (blurred) 0.14f else 0.42f)
         else Color.White.copy(alpha = if (blurred) 0.12f else 0.35f)
@@ -173,15 +181,15 @@ fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mo
             .clip(shape)
             .background(
                 if (selected) Accent
-                else if (g.dark) Color.White.copy(0.12f) else Color.Black.copy(0.07f)
+                else PhotosTheme.colors.fillSubtle
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-            color = if (selected) Color.White else MaterialTheme.colorScheme.onBackground
+            text, style = PhotosType.footnote.copy(fontWeight = FontWeight.Medium),
+            color = if (selected) Color.White else PhotosTheme.colors.label
         )
     }
 }
@@ -224,7 +232,7 @@ fun PhotoTile(
     Box(
         modifier
             .aspectRatio(ratio)
-            .background(Color(0x33888888))
+            .background(PhotosTheme.colors.fillSubtle)
             .combinedClickable(onClick = onClick, onLongClick = onLong)
     ) {
         Thumb(m, Modifier.fillMaxSize(), fixedPx = TILE_THUMB_PX)

@@ -437,7 +437,7 @@ fun SPPhotosRoot(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { pendingDelete = null; trash(list) }) { Text("Hapus", color = Color(0xFFFF453A)) }
+                TextButton(onClick = { pendingDelete = null; trash(list) }) { Text("Hapus", color = Destructive) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Batal") } }
         )
