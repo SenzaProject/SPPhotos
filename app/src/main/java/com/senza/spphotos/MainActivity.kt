@@ -36,7 +36,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -293,30 +296,32 @@ private fun PermissionGate(bypass: Boolean = false, content: @Composable () -> U
         granted = has()
     }
     LaunchedEffect(Unit) { if (!granted && !bypass) launcher.launch(perms) }
+    // Pengguna bisa memberi izin lewat Pengaturan lalu kembali: periksa ulang saat aplikasi dilanjutkan.
+    val owner = ctx as? ComponentActivity
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) granted = has() }
+        owner?.lifecycle?.addObserver(obs)
+        onDispose { owner?.lifecycle?.removeObserver(obs) }
+    }
 
     if (granted || bypass) {
         content()
     } else {
         Column(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp),
+            Modifier.fillMaxSize().background(PhotosTheme.colors.background),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(72.dp), tint = Accent)
-            Spacer(Modifier.height(16.dp))
-            Text("Photos", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(
+            StateView(
+                Icons.Rounded.PhotoLibrary, "Photos",
                 "Izinkan akses ke foto dan video agar galeri dapat ditampilkan. Semua data tetap di perangkat.",
-                textAlign = TextAlign.Center
+                actionText = "Izinkan akses", onAction = { launcher.launch(perms) }
             )
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = { launcher.launch(perms) }) { Text("Izinkan akses") }
-            TextButton(onClick = {
+            PillButton("Buka pengaturan aplikasi", onClick = {
                 ctx.startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))
                 )
-            }) { Text("Buka pengaturan aplikasi") }
+            })
         }
     }
 }

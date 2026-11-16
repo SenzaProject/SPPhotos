@@ -115,10 +115,10 @@ fun CollectionsScreen(
     onMediaTypes: () -> Unit,
     onOpenGrid: (String, (Media) -> Boolean) -> Unit,
     onTrash: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
     var utilOpen by rememberSaveable { mutableStateOf(true) }
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var menu by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize().edgeBlur(0.dp, edgeBottomH()).backdropSource(), state = listState, contentPadding = PaddingValues(bottom = 150.dp)) {
         item {

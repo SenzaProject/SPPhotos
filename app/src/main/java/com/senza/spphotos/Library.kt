@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
@@ -205,16 +206,27 @@ fun LibraryScreen(
                     verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     if (!vm.loaded) {
-                        items(count = 30) { Box(Modifier.aspectRatio(1f).background(Color(0x22888888))) }
+                        items(count = 30) { Box(Modifier.aspectRatio(1f).background(PhotosTheme.colors.fillSubtle)) }
                     } else if (items.isEmpty()) {
                         item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(48.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(56.dp), tint = Color(0x88888888))
-                                Spacer(Modifier.height(12.dp))
-                                Text("Belum ada foto atau video", fontWeight = FontWeight.SemiBold)
+                            when {
+                                vm.loadError -> StateView(
+                                    Icons.Rounded.ErrorOutline, "Tidak bisa memuat galeri",
+                                    "Terjadi kesalahan saat membaca foto dan video.",
+                                    Modifier.padding(top = Space.xxl),
+                                    actionText = "Coba lagi", onAction = { vm.load() }
+                                )
+                                filter != 0 -> StateView(
+                                    Icons.Rounded.PhotoLibrary, "Tidak ada hasil",
+                                    "Tidak ada item yang cocok dengan filter ini.",
+                                    Modifier.padding(top = Space.xxl),
+                                    actionText = "Tampilkan semua", onAction = { onFilter(0) }
+                                )
+                                else -> StateView(
+                                    Icons.Rounded.PhotoLibrary, "Belum ada foto atau video",
+                                    "Foto dan video di perangkat akan muncul di sini.",
+                                    Modifier.padding(top = Space.xxl)
+                                )
                             }
                         }
                     }
@@ -244,10 +256,10 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Library", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    Text("Library", style = PhotosType.largeTitle)
                     Text(
                         if (mode == 2) subtitle else if (mode == 0) "Years" else "Months",
-                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold
+                        style = PhotosType.headline
                     )
                 }
                 Box {
@@ -271,7 +283,7 @@ fun LibraryScreen(
                         Modifier.clickable(onClick = onToggleSelect).padding(horizontal = 24.dp).height(48.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(if (selecting) "Done" else "Select", fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                        Text(if (selecting) "Done" else "Select", style = PhotosType.body.copy(fontWeight = FontWeight.Medium))
                     }
                 }
             }

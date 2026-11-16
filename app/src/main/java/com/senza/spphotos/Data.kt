@@ -14,7 +14,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -185,6 +187,9 @@ class GalleryVM(app: Application) : AndroidViewModel(app) {
     var media by mutableStateOf<List<Media>>(emptyList()); private set
     var trashed by mutableStateOf<List<Media>>(emptyList()); private set
     var loaded by mutableStateOf(false); private set
+    /** true jika pembacaan MediaStore gagal; UI menampilkan state error + "Coba lagi". */
+    var loadError by mutableStateOf(false); private set
+    private var loadJob: Job? = null
     var favs by mutableStateOf(store.favorites()); private set
     var albums by mutableStateOf<Map<String, Set<Long>>>(store.albums()); private set
     var recents by mutableStateOf(store.recents); private set
@@ -198,12 +203,21 @@ class GalleryVM(app: Application) : AndroidViewModel(app) {
     var blurScroll by mutableStateOf(store.blurScroll); private set
 
     fun load() {
-        viewModelScope.launch {
-            val app = getApplication<Application>()
-            val l = withContext(Dispatchers.IO) { MediaRepo.load(app) }
-            val t = withContext(Dispatchers.IO) { MediaRepo.load(app, true) }
-            media = l
-            trashed = t
+        // Batalkan pemuatan sebelumnya agar hasil lama tidak menimpa hasil baru (mis. ON_RESUME berturut-turut).
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            try {
+                val app = getApplication<Application>()
+                val l = withContext(Dispatchers.IO) { MediaRepo.load(app) }
+                val t = withContext(Dispatchers.IO) { MediaRepo.load(app, true) }
+                media = l
+                trashed = t
+                loadError = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                loadError = true
+            }
             loaded = true
         }
     }

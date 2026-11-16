@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -256,4 +262,33 @@ fun GroupedCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
             .background(PhotosTheme.colors.surface),
         content = content
     )
+}
+
+/** Keadaan kosong / error / izin: ikon, judul, penjelasan, dan satu aksi opsional. */
+@Composable
+fun StateView(
+    icon: ImageVector,
+    title: String,
+    message: String? = null,
+    modifier: Modifier = Modifier,
+    actionText: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    val c = PhotosTheme.colors
+    Column(
+        modifier.fillMaxWidth().padding(Space.xxl),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(icon, null, Modifier.size(56.dp), tint = c.tertiaryLabel)
+        Spacer(Modifier.height(Space.md))
+        Text(title, style = PhotosType.headline, color = c.label, textAlign = TextAlign.Center)
+        if (message != null) {
+            Spacer(Modifier.height(Space.xs))
+            Text(message, style = PhotosType.subhead, color = c.secondaryLabel, textAlign = TextAlign.Center)
+        }
+        if (actionText != null && onAction != null) {
+            Spacer(Modifier.height(Space.lg))
+            PillButton(actionText, onAction, prominent = true)
+        }
+    }
 }

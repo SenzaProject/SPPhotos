@@ -140,7 +140,7 @@ Status mengikuti `roadmap.md`:
 | 0 Audit & baseline | DONE (audit kode; build baseline belum bisa dijalankan di lingkungan ini, lihat catatan) |
 | 1 Rebranding menjadi Photos | DONE (nama aplikasi, label, dialog, teks, folder ekspor baru `Pictures/Photos` & `Movies/Photos`, workflow). `applicationId` dan keystore tidak diubah. |
 | 2 Sistem desain | DONE (belum dikompilasi; lihat catatan) — `DesignSystem.kt`: palet terang/gelap, skala tipe, Space/Radius/Motion, komponen SectionHeader/PillButton/GroupedCard; tema Material3 disambung ke token; fallback kaca ringan untuk perangkat RAM rendah |
-| 3 Navigasi & Library | TODO |
+| 3 Navigasi & Library | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 3" di bawah |
 | 4 Collections, Albums, Search | TODO |
 | 5 Viewer | TODO |
 | 6 Editor foto | TODO |
@@ -157,3 +157,18 @@ Ikon peluncur dan splash baru belum dibuat (menunggu aset ikon).
 - Font Apple (SF Pro) proprietari, jadi dipakai font sans sistem dengan bobot & tracking yang mirip.
 - Warna destruktif/aksen/favorit sekarang konstanta tunggal (`Destructive`, `Accent`, `FavoritePink`).
 - Warna lepas yang masih tersisa (editor video, filter foto) akan dirapikan di tahap masing-masing (6, 7).
+
+### Tahap 3 — Navigasi & Library
+Dikerjakan:
+- State kosong/error/izin memakai komponen `StateView`: Library kosong, filter tanpa hasil (tombol "Tampilkan semua"), gagal memuat (tombol "Coba lagi"), dan layar izin.
+- `GalleryVM.load()` kini aman: pemuatan lama dibatalkan saat ada yang baru, error MediaStore tidak lagi membuat aplikasi berhenti (`loadError`).
+- Layar izin memeriksa ulang saat aplikasi dilanjutkan, jadi setelah izin diberikan lewat Pengaturan galeri langsung terbuka.
+- Fade-in singkat saat pindah tab (Library / Collections / Search); posisi scroll Library dan Collections dipertahankan.
+- Bilah navigasi: tab punya semantik aksesibilitas (role Tab, status terpilih, bisa diaktifkan TalkBack), tombol bulat berperan Button, dan animasi pegas ikut Reduce Motion.
+- Header Library memakai token tipografi.
+
+Belum / catatan:
+- **Jump to date** tidak ditemukan di kode saat ini (walau tertulis di README v1.0); belum diimplementasikan ulang.
+- Tab "For You" lama sudah dipindah ke Collections > Memories sejak v1.1; struktur tab utama tetap Library | Collections + tombol Search.
+- Pemulihan thumbnail saat scroll cepat mengandalkan key item + permintaan ukuran tetap yang sudah ada; belum diuji ulang di perangkat.
+- Akses foto terbatas Android 14 (READ_MEDIA_VISUAL_USER_SELECTED) belum didukung.

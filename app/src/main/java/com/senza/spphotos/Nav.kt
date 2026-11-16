@@ -11,6 +11,13 @@ import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -207,6 +214,8 @@ fun LiquidSelector(
     val haptic = LocalHapticFeedback.current
     val g = LocalGlass.current
     val n = items.size
+    // Reduce Motion → tween pendek tanpa pantulan; selain itu pegas "jelly" asli.
+    fun <T> sp(d: Float, st: Float): AnimationSpec<T> = if (g.reduced) tween(90) else spring(dampingRatio = d, stiffness = st)
     var widthPx by remember { mutableFloatStateOf(0f) }
     var pressed by remember { mutableStateOf(false) }
     var ready by remember { mutableStateOf(false) }
@@ -226,13 +235,13 @@ fun LiquidSelector(
             if (!ready) {
                 x.snapTo(centerOf(selected)); ready = true
             } else {
-                x.animateTo(centerOf(selected), spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+                x.animateTo(centerOf(selected), sp(0.55f, Spring.StiffnessMediumLow))
             }
         }
     }
     val press by animateFloatAsState(
         if (pressed) 1f else 0f,
-        spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium), label = "lens"
+        sp(0.5f, Spring.StiffnessMedium), label = "lens"
     )
     val nearIdx by remember(slotW) { derivedStateOf { nearest(x.value) } }
 
@@ -255,7 +264,7 @@ fun LiquidSelector(
                     val maxC = centerOf(n - 1)
                     fingerX = px.coerceIn(minC, maxC)
                     scope.launch {
-                        x.animateTo(fingerX, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium))
+                        x.animateTo(fingerX, sp(0.6f, Spring.StiffnessMedium))
                     }
                     var last = nearest(px)
                     do {
@@ -265,7 +274,7 @@ fun LiquidSelector(
                         val tx = px.coerceIn(minC, maxC)
                         fingerX = tx
                         scope.launch {
-                            x.animateTo(tx, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium))
+                            x.animateTo(tx, sp(0.62f, Spring.StiffnessMedium))
                         }
                         val nr = nearest(px)
                         if (nr != last) {
@@ -279,7 +288,7 @@ fun LiquidSelector(
                     onSelect(idx)
                     fingerX = centerOf(idx)
                     scope.launch {
-                        x.animateTo(centerOf(idx), spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow))
+                        x.animateTo(centerOf(idx), sp(0.5f, Spring.StiffnessMediumLow))
                     }
                 }
             }
@@ -313,7 +322,12 @@ fun LiquidSelector(
                 val under = press > 0.25f && i == nearIdx
                 val tint = if (under || (sel && press <= 0.25f)) Accent else LocalContentColor.current
                 Column(
-                    Modifier.weight(1f).fillMaxHeight(),
+                    Modifier.weight(1f).fillMaxHeight()
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Tab
+                            this.selected = i == selected
+                            onClick(item.label) { onSelect(i); true }
+                        },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -392,9 +406,10 @@ fun GlassRoundButton(
 ) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
+    val reduced = LocalGlass.current.reduced
     val sc by animateFloatAsState(
         if (pressed) 1.18f else 1f,
-        spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "round"
+        if (reduced) tween(90) else spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium), label = "round"
     )
     Glass(
         modifier.size(size).graphicsLayer { scaleX = sc; scaleY = sc },
@@ -402,7 +417,7 @@ fun GlassRoundButton(
         behindBlur = true
     ) {
         Box(
-            Modifier.fillMaxSize().clickable(interactionSource = src, indication = null, onClick = onClick),
+            Modifier.fillMaxSize().clickable(interactionSource = src, indication = null, role = Role.Button, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(

@@ -28,7 +28,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
@@ -120,6 +122,14 @@ private fun EnterAnim(reduce: Boolean, content: @Composable () -> Unit) {
     ) { Box(Modifier.fillMaxSize()) { content() } }
 }
 
+/** Fade-in singkat saat berpindah tab utama (hanya layar yang masuk; Reduce Motion = langsung tampil). */
+@Composable
+private fun TabEnter(reduce: Boolean, content: @Composable () -> Unit) {
+    val a = remember { Animatable(if (reduce) 1f else 0f) }
+    LaunchedEffect(Unit) { if (!reduce) a.animateTo(1f, tween(Motion.FADE_MS)) }
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = a.value }) { content() }
+}
+
 /** Media dari URI luar MediaStore (mis. FileProvider aplikasi lain). */
 fun adhocMedia(ctx: Context, uri: Uri): Media {
     var name = uri.lastPathSegment ?: "media"
@@ -195,6 +205,7 @@ fun SPPhotosRoot(
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var sortAdded by rememberSaveable { mutableStateOf(false) }
     val libState = rememberLazyGridState()
+    val collState = rememberLazyListState()
     val backdropLayer = rememberGraphicsLayer()
     val backdrop = remember(backdropLayer) { BackdropState(backdropLayer) }
     val backdropOn = vm.blurOn && !vm.reduce
@@ -304,6 +315,7 @@ fun SPPhotosRoot(
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         CompositionLocalProvider(LocalBackdrop provides (if (backdropOn) backdrop else null)) {
+        key(searching, main) { TabEnter(vm.reduce) {
         when {
             searching -> SearchScreen(vm, selecting, selected, onTile, onLong)
             main == 0 -> LibraryScreen(
@@ -321,9 +333,11 @@ fun SPPhotosRoot(
                 onMediaTypes = { stack.add(Overlay.MediaTypes) },
                 onOpenGrid = openGrid,
                 onTrash = { stack.add(Overlay.Trash) },
-                onSettings = { stack.add(Overlay.Settings) }
+                onSettings = { stack.add(Overlay.Settings) },
+                listState = collState
             )
         }
+        } }
 
         if (showNav || showSel) {
             val botH = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 118.dp
