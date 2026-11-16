@@ -141,7 +141,7 @@ Status mengikuti `roadmap.md`:
 | 1 Rebranding menjadi Photos | DONE (nama aplikasi, label, dialog, teks, folder ekspor baru `Pictures/Photos` & `Movies/Photos`, workflow). `applicationId` dan keystore tidak diubah. |
 | 2 Sistem desain | DONE (belum dikompilasi; lihat catatan) — `DesignSystem.kt`: palet terang/gelap, skala tipe, Space/Radius/Motion, komponen SectionHeader/PillButton/GroupedCard; tema Material3 disambung ke token; fallback kaca ringan untuk perangkat RAM rendah |
 | 3 Navigasi & Library | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 3" di bawah |
-| 4 Collections, Albums, Search | TODO |
+| 4 Collections, Albums, Search | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 4" di bawah |
 | 5 Viewer | TODO |
 | 6 Editor foto | TODO |
 | 7 Editor video | TODO |
@@ -172,3 +172,18 @@ Belum / catatan:
 - Tab "For You" lama sudah dipindah ke Collections > Memories sejak v1.1; struktur tab utama tetap Library | Collections + tombol Search.
 - Pemulihan thumbnail saat scroll cepat mengandalkan key item + permintaan ukuran tetap yang sudah ada; belum diuji ulang di perangkat.
 - Akses foto terbatas Android 14 (READ_MEDIA_VISUAL_USER_SELECTED) belum didukung.
+
+### Tahap 4 — Collections, Albums, Search
+Dikerjakan:
+- **Collections** kini visual: strip kartu *Recent Days*, kartu *Memories* terbaru, strip *Albums* (album buatan + album perangkat), lalu Media Types dan Utilities. Setiap seksi punya "See All".
+- **People & Pets** dan **Places** tampil sebagai baris "Belum tersedia" dengan alasannya (butuh pengenalan wajah / data GPS). Tidak ada konten palsu.
+- Lencana "SP" di header Collections diganti ikon Settings.
+- **Keluarkan dari album**: sebelumnya fungsi `removeFromAlbum` ada di kode tapi tidak punya UI. Sekarang saat membuka album buatan dan memilih item, muncul tombol "Keluarkan dari album" (file tidak dihapus).
+- Album buatan dari Collections kini dibuka dengan menu Ubah nama / Hapus album seperti dari layar Albums.
+- State kosong: Search tanpa hasil, album kosong vs. daftar kosong (pesan dibedakan), Recently Deleted kosong, hint saat belum ada album buatan.
+- Kartu album memakai komponen `CoverCard`; judul memakai token tipografi.
+
+Belum / catatan:
+- Pencarian tetap berbasis kata kunci (nama file, tanggal/bulan, album, jenis media, favorit); tidak ada pencarian objek/teks dalam gambar.
+- Layar "For You", Recent Days, dan Media Types masih memakai tata letak lama (hanya judul dan warna yang disamakan); polesan lebih lanjut ada di Tahap 9.
+- Operasi album, Recently Deleted (pulihkan / hapus permanen), dan search belum diuji di perangkat.

@@ -125,7 +125,7 @@ private fun PeriodScreen(vm: GalleryVM, byYear: Boolean, onOpen: (String, (Media
             Box(
                 Modifier.fillMaxWidth().height(if (byYear) 280.dp else 200.dp)
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0x33888888))
+                    .background(PhotosTheme.colors.fillSubtle)
                     .clickable {
                         val ids = list.map { it.key }.toSet()
                         onOpen(title) { it.key in ids }

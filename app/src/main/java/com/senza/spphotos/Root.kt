@@ -334,6 +334,7 @@ fun SPPhotosRoot(
                 onOpenGrid = openGrid,
                 onTrash = { stack.add(Overlay.Trash) },
                 onSettings = { stack.add(Overlay.Settings) },
+                onOpenAlbum = { t, f, a -> stack.add(Overlay.Grid(t, f, a)) },
                 listState = collState
             )
         }
@@ -434,7 +435,14 @@ fun SPPhotosRoot(
                 onFav = { vm.setFav(sel, !sel.all { it.key in vm.favs }) },
                 onAlbum = { albumDialog = true },
                 onDelete = { pendingDelete = sel },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                onRemoveFromAlbum = (top as? Overlay.Grid)?.album?.let { albumName ->
+                    {
+                        vm.removeFromAlbum(albumName, selected)
+                        endSelect()
+                        Toast.makeText(ctx, "Dikeluarkan dari $albumName", Toast.LENGTH_SHORT).show()
+                    }
+                }
             )
         }
     }

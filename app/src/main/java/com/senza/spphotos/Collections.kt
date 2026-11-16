@@ -21,6 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,7 +91,7 @@ private fun CollectionRow(title: String, onClick: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(title, style = PhotosType.title2, modifier = Modifier.weight(1f))
             RoundChevron()
         }
     }
@@ -107,6 +113,37 @@ private fun UtilityChip(icon: ImageVector, label: String, modifier: Modifier, on
 }
 
 @Composable
+private fun EmptyHint(text: String) {
+    Text(
+        text, style = PhotosType.subhead, color = PhotosTheme.colors.secondaryLabel,
+        modifier = Modifier.padding(horizontal = Space.screenEdge, vertical = Space.sm)
+    )
+}
+
+/** Baris untuk fitur yang butuh model/layanan tambahan: ditampilkan jujur sebagai "belum tersedia". */
+@Composable
+private fun UnavailableRow(icon: ImageVector, title: String, reason: String) {
+    val c = PhotosTheme.colors
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = Space.xl, vertical = Space.lg),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, null, tint = c.tertiaryLabel, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.size(Space.md))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = PhotosType.title3, color = c.secondaryLabel)
+                Text(reason, style = PhotosType.footnote, color = c.tertiaryLabel)
+            }
+            Text("Belum tersedia", style = PhotosType.caption1, color = c.tertiaryLabel)
+        }
+    }
+}
+
+private class AlbumEntry(val title: String, val items: List<Media>, val custom: Boolean)
+
+@Composable
 fun CollectionsScreen(
     vm: GalleryVM,
     onAlbums: () -> Unit,
@@ -116,10 +153,25 @@ fun CollectionsScreen(
     onOpenGrid: (String, (Media) -> Boolean) -> Unit,
     onTrash: () -> Unit,
     onSettings: () -> Unit,
+    onOpenAlbum: (String, (Media) -> Boolean, String?) -> Unit = { t, f, _ -> onOpenGrid(t, f) },
     listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
     var utilOpen by rememberSaveable { mutableStateOf(true) }
     var menu by remember { mutableStateOf(false) }
+    val today = remember { startOfDay(System.currentTimeMillis()) }
+    val recentDays = remember(vm.media) {
+        vm.media.groupBy { startOfDay(it.dateMs) }.entries.sortedByDescending { it.key }.take(8)
+    }
+    val memory = remember(vm.media) { buildMemories(vm.media).firstOrNull() }
+    val albumCards = remember(vm.media, vm.albums) {
+        val custom = vm.albums.keys.map { n ->
+            val keys = vm.albums[n] ?: emptySet()
+            AlbumEntry(n, vm.media.filter { it.key in keys }, true)
+        }
+        val device = vm.media.groupBy { it.bucket }.entries
+            .sortedByDescending { it.value.size }.take(10).map { AlbumEntry(it.key, it.value, false) }
+        custom + device
+    }
     LazyColumn(Modifier.fillMaxSize().edgeBlur(0.dp, edgeBottomH()).backdropSource(), state = listState, contentPadding = PaddingValues(bottom = 150.dp)) {
         item {
             Row(
@@ -127,7 +179,7 @@ fun CollectionsScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Collections", fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Collections", style = PhotosType.largeTitle, modifier = Modifier.weight(1f))
                 Box {
                     GlassIconButton(Icons.Rounded.MoreHoriz, "Menu", { menu = true }, size = 48, blur = false)
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -135,17 +187,69 @@ fun CollectionsScreen(
                         DropdownMenuItem(text = { Text("Recently Deleted") }, onClick = { menu = false; onTrash() })
                     }
                 }
-                Box(
-                    Modifier.size(48.dp).clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(Color(0xFF5E5CE6), Color(0xFF64D2FF))))
-                        .clickable(onClick = onSettings),
-                    contentAlignment = Alignment.Center
-                ) { Text("SP", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                GlassIconButton(Icons.Rounded.Settings, "Settings", onSettings, size = 48, blur = false)
             }
         }
-        item { CollectionRow("Albums", onAlbums) }
-        item { CollectionRow("Memories", onMemories) }
-        item { CollectionRow("Recent Days", onRecentDays) }
+        item { SectionHeader("Recent Days", actionText = "See All", onAction = onRecentDays) }
+        item {
+            if (recentDays.isEmpty()) EmptyHint(if (vm.loaded) "Belum ada foto atau video." else "Memuat…")
+            else LazyRow(
+                contentPadding = PaddingValues(horizontal = Space.screenEdge),
+                horizontalArrangement = Arrangement.spacedBy(Space.md)
+            ) {
+                items(recentDays, key = { it.key }) { (day, list) ->
+                    val title = when {
+                        day >= today -> "Today"
+                        day >= today - DAY_MS + 3_600_000L -> "Yesterday"
+                        else -> formatDate(day, "EEE, d MMM")
+                    }
+                    CoverCard(
+                        list.first(), title, "${list.size} item",
+                        onClick = { val ids = list.map { it.key }.toSet(); onOpenGrid(title) { it.key in ids } },
+                        modifier = Modifier.width(150.dp)
+                    )
+                }
+            }
+        }
+        item { SectionHeader("Memories", actionText = "See All", onAction = onMemories) }
+        item {
+            val mem = memory
+            if (mem == null) EmptyHint("Memories muncul saat satu bulan punya minimal 5 foto/video.")
+            else Box(
+                Modifier.fillMaxWidth().padding(horizontal = Space.screenEdge).height(200.dp)
+                    .clip(RoundedCornerShape(Radius.cardLarge)).background(PhotosTheme.colors.fillSubtle)
+                    .clickable(role = Role.Button, onClick = onMemories)
+            ) {
+                Thumb(mem.items[mem.items.size / 2], Modifier.fillMaxSize(), fixedPx = 640)
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.55f)))))
+                Column(Modifier.align(Alignment.BottomStart).padding(Space.lg)) {
+                    Text(mem.title, style = PhotosType.title2, color = Color.White)
+                    Text(mem.subtitle, style = PhotosType.footnote, color = Color.White.copy(0.85f))
+                }
+            }
+        }
+        item { SectionHeader("Albums", actionText = "See All", onAction = onAlbums) }
+        item {
+            if (albumCards.isEmpty()) EmptyHint(if (vm.loaded) "Belum ada album." else "Memuat…")
+            else LazyRow(
+                contentPadding = PaddingValues(horizontal = Space.screenEdge),
+                horizontalArrangement = Arrangement.spacedBy(Space.md)
+            ) {
+                items(albumCards, key = { (if (it.custom) "u" else "b") + it.title }) { e ->
+                    CoverCard(
+                        e.items.firstOrNull(), e.title, "${e.items.size}",
+                        onClick = {
+                            if (e.custom) onOpenAlbum(e.title, { m -> m.key in (vm.albums[e.title] ?: emptySet()) }, e.title)
+                            else onOpenAlbum(e.title, { m -> m.bucket == e.title }, null)
+                        },
+                        modifier = Modifier.width(140.dp)
+                    )
+                }
+            }
+        }
+        item { Spacer(Modifier.height(Space.lg)) }
+        item { UnavailableRow(Icons.Rounded.Face, "People & Pets", "Butuh pengenalan wajah di perangkat.") }
+        item { UnavailableRow(Icons.Rounded.Place, "Places", "Butuh data lokasi (GPS) pada foto.") }
         item { CollectionRow("Media Types", onMediaTypes) }
         item {
             Column(Modifier.fillMaxWidth()) {
@@ -208,7 +312,7 @@ fun RecentDaysScreen(
     ) {
         item {
             Text(
-                "Recent Days", fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                "Recent Days", style = PhotosType.largeTitle,
                 modifier = Modifier.statusBarsPadding().padding(start = 6.dp, bottom = 4.dp)
             )
         }
@@ -220,7 +324,7 @@ fun RecentDaysScreen(
             }
             Box(
                 Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(28.dp))
-                    .background(Color(0x33888888))
+                    .background(PhotosTheme.colors.fillSubtle)
                     .clickable { val ids = list.map { it.key }.toSet(); onOpen(title) { it.key in ids } }
             ) {
                 Thumb(list.first(), Modifier.fillMaxSize())
@@ -252,7 +356,7 @@ fun MediaTypesScreen(vm: GalleryVM, onOpen: (String, (Media) -> Boolean) -> Unit
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 76.dp, bottom = 40.dp)) {
         item {
             Text(
-                "Media Types", fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                "Media Types", style = PhotosType.largeTitle,
                 modifier = Modifier.statusBarsPadding().padding(start = 20.dp, bottom = 12.dp)
             )
         }

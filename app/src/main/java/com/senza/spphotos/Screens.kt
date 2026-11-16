@@ -80,6 +80,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -112,7 +113,7 @@ fun ForYouScreen(
     ) {
         item {
             Column(Modifier.statusBarsPadding().padding(top = topPad, start = 4.dp)) {
-                Text("For You", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                Text("For You", style = PhotosType.largeTitle)
                 Text("Memories & kurasi", fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground.copy(dim()))
             }
         }
@@ -156,18 +157,7 @@ fun ForYouScreen(
 
 @Composable
 private fun AlbumCard(title: String, count: Int, cover: Media?, onClick: () -> Unit) {
-    Column(Modifier.clickable(onClick = onClick)) {
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(22.dp))
-                .background(Color(0x33888888)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (cover != null) Thumb(cover, Modifier.fillMaxSize())
-            else Icon(Icons.Rounded.Collections, null, tint = Color(0x88888888), modifier = Modifier.size(36.dp))
-        }
-        Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
-        Text("$count", fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground.copy(dim()))
-    }
+    CoverCard(cover, title, "$count", onClick)
 }
 
 @Composable
@@ -206,7 +196,7 @@ fun AlbumsScreen(
                 Modifier.statusBarsPadding().padding(top = topPad, start = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Albums", fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Albums", style = PhotosType.largeTitle, modifier = Modifier.weight(1f))
                 GlassIconButton(Icons.Rounded.Add, "Buat album", { creating = true }, size = 42)
             }
         }
@@ -218,6 +208,15 @@ fun AlbumsScreen(
                 AlbumCard(name, inAlbum.size, inAlbum.firstOrNull()) {
                     onOpen(name, { it.key in (vm.albums[name] ?: emptySet()) }, name)
                 }
+            }
+        }
+        if (vm.albums.isEmpty()) {
+            item(span = full) {
+                Text(
+                    "Belum ada album buatanmu. Tekan + untuk membuat album, lalu tambahkan foto dari Library.",
+                    style = PhotosType.subhead, color = PhotosTheme.colors.secondaryLabel,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
             }
         }
         item(span = full) { SectionTitle("Di perangkat") }
@@ -284,7 +283,7 @@ fun GridScreen(
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(Modifier.statusBarsPadding().padding(top = 72.dp, start = 20.dp, end = 20.dp, bottom = 12.dp)) {
-                    Text(title, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text(title, style = PhotosType.title1)
                     Text("${items.size} item", fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground.copy(dim()))
                 }
             }
@@ -309,10 +308,11 @@ fun GridScreen(
             }
         }
         if (items.isEmpty()) {
-            Text(
-                "Album kosong. Pilih foto di Library lalu tekan “Album”.",
-                modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                color = MaterialTheme.colorScheme.onBackground.copy(dim())
+            StateView(
+                Icons.Rounded.Collections,
+                if (albumName != null) "Album kosong" else "Tidak ada item",
+                if (albumName != null) "Pilih foto di Library, tekan ikon album, lalu tambahkan ke album ini." else null,
+                Modifier.align(Alignment.Center)
             )
         }
     }
@@ -367,7 +367,7 @@ fun SearchScreen(
     ) {
         item(span = full) {
             Column(Modifier.statusBarsPadding().padding(top = 20.dp, start = 16.dp, end = 16.dp)) {
-                Text("Search", fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+                Text("Search", style = PhotosType.largeTitle, modifier = Modifier.padding(start = 4.dp))
                 Spacer(Modifier.height(10.dp))
                 Glass(Modifier.fillMaxWidth().height(54.dp), RoundedCornerShape(27.dp), blur = false) {
                     TextField(
@@ -431,6 +431,15 @@ fun SearchScreen(
                     modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 4.dp)
                 )
             }
+            if (results.isEmpty()) {
+                item(span = full) {
+                    StateView(
+                        Icons.Rounded.Search, "Tidak ada hasil",
+                        "Coba kata kunci lain, misalnya bulan, nama album, atau “video”.",
+                        Modifier.padding(top = Space.xxl)
+                    )
+                }
+            }
             itemsIndexed(results, key = { _, m -> "s${m.key}" }) { i, m ->
                 PhotoTile(m, m.key in vm.favs, selecting, m.key in selected,
                     onClick = { onTile(results, i) }, onLong = { onLong(m) })
@@ -459,7 +468,7 @@ fun TrashScreen(
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(Modifier.statusBarsPadding().padding(top = 72.dp, start = 20.dp, end = 20.dp, bottom = 12.dp)) {
-                    Text("Recently Deleted", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text("Recently Deleted", style = PhotosType.title1)
                     Text(
                         "Item dipindahkan ke tempat sampah sistem dan dihapus otomatis setelah sekitar 30 hari.",
                         fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(dim())
@@ -476,7 +485,11 @@ fun TrashScreen(
             Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp), size = 42
         )
         if (items.isEmpty()) {
-            Text("Tidak ada item", modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onBackground.copy(dim()))
+            StateView(
+                Icons.Rounded.Delete, "Tidak ada item",
+                "Item yang kamu hapus akan muncul di sini.",
+                Modifier.align(Alignment.Center)
+            )
         } else {
             Glass(
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp).fillMaxWidth(),
@@ -507,7 +520,9 @@ fun SelectionBar(
     onFav: () -> Unit,
     onAlbum: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Hanya diisi saat membuka album buatan: mengeluarkan item terpilih dari album (file tidak dihapus). */
+    onRemoveFromAlbum: (() -> Unit)? = null
 ) {
     Box(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp)) {
         Glass(Modifier.fillMaxWidth().height(64.dp), RoundedCornerShape(32.dp)) {
@@ -521,6 +536,7 @@ fun SelectionBar(
                 IconBtn(Icons.Rounded.Share, "Bagikan", on, a, onShare)
                 IconBtn(if (allFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Favorit", on, a, onFav)
                 IconBtn(Icons.Rounded.Collections, "Tambah ke album", on, a, onAlbum)
+                if (onRemoveFromAlbum != null) IconBtn(Icons.Rounded.RemoveCircleOutline, "Keluarkan dari album", on, a, onRemoveFromAlbum)
                 IconBtn(Icons.Rounded.Delete, "Hapus", on, a, onDelete, Destructive)
             }
         }

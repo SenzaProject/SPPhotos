@@ -12,6 +12,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Collections
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -290,5 +295,33 @@ fun StateView(
             Spacer(Modifier.height(Space.lg))
             PillButton(actionText, onAction, prominent = true)
         }
+    }
+}
+
+/** Kartu sampul (album, hari, dsb.): gambar bersudut membulat + judul + keterangan di bawahnya. */
+@Composable
+fun CoverCard(
+    cover: Media?,
+    title: String,
+    subtitle: String? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    aspect: Float = 1f
+) {
+    val c = PhotosTheme.colors
+    Column(modifier.clip(RoundedCornerShape(Radius.card)).clickable(role = Role.Button, onClick = onClick)) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(aspect)
+                .clip(RoundedCornerShape(Radius.card)).background(c.fillSubtle),
+            contentAlignment = Alignment.Center
+        ) {
+            if (cover != null) Thumb(cover, Modifier.fillMaxSize(), fixedPx = 480)
+            else Icon(Icons.Rounded.Collections, null, tint = c.tertiaryLabel, modifier = Modifier.size(36.dp))
+        }
+        Text(
+            title, style = PhotosType.subhead.copy(fontWeight = FontWeight.SemiBold), color = c.label,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = Space.xs)
+        )
+        if (subtitle != null) Text(subtitle, style = PhotosType.caption1, color = c.secondaryLabel, maxLines = 1)
     }
 }
