@@ -130,3 +130,24 @@ salin teks dari foto (tahan 2 detik), serta teks/stiker/bingkai/gambar di editor
 - Logo baru (ikon adaptif + ikon bertema).
 - **Blur progresif via shader (Android 13+)**: satu shader di grid menggeser radius blur menurut posisi (paling kabur di tepi
   atas & bawah, seperti iOS). Menggantikan sistem rekam-ulang lapisan yang tidak menampilkan blur. Android 12 ke bawah memakai cadangan lama.
+
+## v2.0 — Redesain "Photos" (sedang berjalan)
+
+Status mengikuti `roadmap.md`:
+
+| Tahap | Status |
+|---|---|
+| 0 Audit & baseline | DONE (audit kode; build baseline belum bisa dijalankan di lingkungan ini, lihat catatan) |
+| 1 Rebranding menjadi Photos | DONE (nama aplikasi, label, dialog, teks, folder ekspor baru `Pictures/Photos` & `Movies/Photos`, workflow). `applicationId` dan keystore tidak diubah. |
+| 2 Sistem desain | TODO |
+| 3 Navigasi & Library | TODO |
+| 4 Collections, Albums, Search | TODO |
+| 5 Viewer | TODO |
+| 6 Editor foto | TODO |
+| 7 Editor video | TODO |
+| 8 Settings & aksesibilitas | TODO |
+| 9 Motion & Liquid Glass | TODO |
+| 10 QA & rilis | TODO |
+
+Catatan: file hasil ekspor lama di `Pictures/SP Photos` dan `Movies/SP Photos` tidak dipindah/dihapus.
+Ikon peluncur dan splash baru belum dibuat (menunggu aset ikon).

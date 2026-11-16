@@ -563,7 +563,7 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
                                 saving = false
                                 Toast.makeText(
                                     ctx,
-                                    if (ok) "Disimpan sebagai salinan di Pictures/SP Photos" else "Gagal menyimpan",
+                                    if (ok) "Disimpan sebagai salinan di Pictures/Photos" else "Gagal menyimpan",
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 if (ok) onSaved()

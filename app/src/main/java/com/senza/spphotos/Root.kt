@@ -147,7 +147,7 @@ fun isDefaultGallery(ctx: Context): Boolean = try {
     false
 }
 
-/** Memicu dialog "Buka dengan" sistem: pilih SP Photos lalu "Selalu". */
+/** Memicu dialog "Buka dengan" sistem: pilih Photos lalu "Selalu". */
 fun openAsDefault(ctx: Context, sample: Uri?) {
     try {
         val u = sample ?: Uri.parse("content://media/external/images/media/1")
@@ -561,10 +561,10 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
                 val sctx = LocalContext.current
                 var isDefault by remember { mutableStateOf(isDefaultGallery(sctx)) }
                 SettingCard("Galeri default") {
-                    StatRow("Status", if (isDefault) "SP Photos ✓" else "Belum jadi default")
+                    StatRow("Status", if (isDefault) "Photos ✓" else "Belum jadi default")
                     Text(
-                        "Agar foto & video dari file manager, chat, dan kamera terbuka di SP Photos: tekan \"Jadikan default\", " +
-                            "pilih SP Photos lalu \"Selalu\". Jika yang terbuka aplikasi galeri lain, buka \"Pengaturan\" → " +
+                        "Agar foto & video dari file manager, chat, dan kamera terbuka di Photos: tekan \"Jadikan default\", " +
+                            "pilih Photos lalu \"Selalu\". Jika yang terbuka aplikasi galeri lain, buka \"Pengaturan\" → " +
                             "Aplikasi default / Kelola aplikasi → galeri lama → hapus pengaturan default, lalu ulangi.",
                         fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
                     )
@@ -587,7 +587,7 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
             }
             item {
                 SettingCard("Tentang") {
-                    StatRow("SP Photos", "v1.7")
+                    StatRow("Photos", "v2.0")
                     Text(
                         "Konsep UI mengacu pada dokumen “iOS 27 Photos · Liquid Glass”. Bukan produk atau tampilan resmi Apple.",
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)

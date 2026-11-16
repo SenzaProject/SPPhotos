@@ -132,7 +132,7 @@ class SPPhotosApp : Application(), ImageLoaderFactory {
                 val sw = java.io.StringWriter()
                 e.printStackTrace(java.io.PrintWriter(sw))
                 java.io.File(filesDir, "last_crash.txt").writeText(
-                    "SP Photos 1.8 · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n" +
+                    "Photos ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n" +
                         "Thread: ${t.name}\n\n" + sw.toString()
                 )
             } catch (_: Throwable) {
@@ -304,7 +304,7 @@ private fun PermissionGate(bypass: Boolean = false, content: @Composable () -> U
         ) {
             Icon(Icons.Rounded.PhotoLibrary, null, Modifier.size(72.dp), tint = Accent)
             Spacer(Modifier.height(16.dp))
-            Text("SP Photos", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("Photos", fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             Text(
                 "Izinkan akses ke foto dan video agar galeri dapat ditampilkan. Semua data tetap di perangkat.",

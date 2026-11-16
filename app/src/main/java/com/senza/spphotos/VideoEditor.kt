@@ -431,7 +431,7 @@ private suspend fun saveVideoToGallery(ctx: Context, file: File): Boolean = with
         val cv = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Movies/SP Photos")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Movies/Photos")
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val uri = ctx.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cv) ?: return@withContext false
@@ -1002,7 +1002,7 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                             }
                         }
                         Text("Resolusi yang abu-abu tidak didukung encoder perangkat ini. Menaikkan resolusi tidak menambah detail, dan 4K+ butuh waktu & memori besar.", fontSize = 11.sp)
-                        Text("Durasi ${fmtT(total)} · disimpan ke Movies/SP Photos", fontSize = 12.sp)
+                        Text("Durasi ${fmtT(total)} · disimpan ke Movies/Photos", fontSize = 12.sp)
                     } else {
                         LinearProgressIndicator(progress = { exportProgress }, modifier = Modifier.fillMaxWidth())
                         Text("${(exportProgress * 100).roundToInt()}% — jangan tutup aplikasi", fontSize = 12.sp)
@@ -1046,7 +1046,7 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                             }
                         }
                         if (error == null && saveVideoToGallery(ctx, out)) {
-                            toast("Video disimpan di Movies/SP Photos")
+                            toast("Video disimpan di Movies/Photos")
                             exporting = false; showExport = false
                             onSaved()
                         } else {

@@ -8,7 +8,7 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Agar bisa dicek apakah SP Photos sudah jadi aplikasi default untuk membuka foto/video -->
+    <!-- Agar bisa dicek apakah Photos sudah jadi aplikasi default untuk membuka foto/video -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -25,7 +25,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="SP Photos"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SPPhotos">
         <activity

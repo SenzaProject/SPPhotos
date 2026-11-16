@@ -374,7 +374,7 @@ suspend fun saveEdit(ctx: Context, m: Media, st: EditState): Boolean = withConte
         val cv = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/SP Photos")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Photos")
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val uri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv) ?: return@withContext false

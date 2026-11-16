@@ -1,4 +1,4 @@
-name: Build SP Photos APK
+name: Build Photos APK
 
 on:
   push:
@@ -25,5 +25,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SP-Photos-debug-apk
+          name: Photos-debug-apk
           path: app/build/outputs/apk/debug/*.apk
