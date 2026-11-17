@@ -144,7 +144,7 @@ Status mengikuti `roadmap.md`:
 | 4 Collections, Albums, Search | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 4" di bawah |
 | 5 Viewer | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 5" di bawah |
 | 6 Editor foto | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 6" di bawah |
-| 7 Editor video | TODO |
+| 7 Editor video | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 7" di bawah |
 | 8 Settings & aksesibilitas | TODO |
 | 9 Motion & Liquid Glass | TODO |
 | 10 QA & rilis | TODO |
@@ -231,3 +231,20 @@ Belum / catatan:
 - Perubahan yang belum disimpan tidak dipulihkan bila proses aplikasi dimatikan sistem.
 - Belum diuji di perangkat: kesesuaian pratinjau vs ekspor, undo/redo, dan salinan dapat dibuka di galeri.
 - Editor video masih menamai hasil `SP_…` (Tahap 7).
+
+### Tahap 7 — Editor video
+Fitur lama dipertahankan tanpa diubah logikanya: trim, split, speed, mute, duplicate, delete, filter, adjustment, teks, stiker, transisi, undo/redo, dan ekspor (pemeriksaan encoder per resolusi, H.264/H.265).
+
+Dikerjakan (fokus pada alur ekspor yang stabil):
+- **Ekspor bisa dibatalkan** (tombol "Batalkan ekspor"); sebelumnya dialog tidak bisa ditutup sampai selesai. Berkas sementara dihapus bila ekspor gagal atau dibatalkan.
+- **Pesan gagal yang jelas**: error encoder/decoder/penulisan/memori diterjemahkan menjadi saran (mis. turunkan resolusi), bukan teks teknis mentah. Kegagalan saat menyusun rencana ekspor (termasuk kehabisan memori) kini ditangkap, bukan membuat aplikasi berhenti.
+- **Layar dijaga menyala saat ekspor** agar proses tidak terhenti.
+- **Simpan ke galeri lebih aman**: berkas setengah jadi dihapus bila penyalinan gagal. Nama hasil `Edit_…mp4` (sebelumnya `SP_…`), lokasi `Movies/Photos` ditampilkan di dialog dan toast.
+- **Buang perubahan?** untuk tombol tutup dan tombol kembali bila ada edit; tombol kembali diabaikan saat ekspor berjalan.
+- Palet disamakan dengan sistem desain Photos (latar hitam, panel `PhotosDark.surface`, aksen biru Photos menggantikan cyan), ikon bilah sistem terang, dan kontrol utama bersemantik tombol untuk TalkBack.
+
+Belum / catatan:
+- Pembatalan memakai pembatalan Transformer; keberhasilan pembatalan di semua perangkat belum diuji.
+- Penyusunan rencana ekspor (`buildExportPlan`) masih berjalan di thread utama sebelum ekspor dimulai; pada proyek dengan banyak teks/stiker bisa terasa sesaat tertahan.
+- Timeline, playhead, dan panel alat belum didesain ulang secara visual (hanya warna/token); kemampuan ekspor tetap bergantung pada encoder perangkat. Kombinasi codec/resolusi/fps di luar yang dicek `resolutionSupported` belum divalidasi.
+- Belum diuji di perangkat: ekspor menghasilkan berkas yang bisa diputar, durasi/sinkron audio, serta efek/transisi pada berkas hasil.

@@ -7,6 +7,10 @@
 
 package com.senza.spphotos
 
+import kotlinx.coroutines.CancellationException
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.LocalView
+import androidx.activity.compose.BackHandler
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -144,9 +148,9 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private val CapBg = Color(0xFF0E0E10)
-private val CapPanel = Color(0xFF1C1C1F)
-private val CapCyan = Color(0xFF19E3F2)
+private val CapBg = PhotosDark.background
+private val CapPanel = PhotosDark.surface
+private val CapCyan = Accent
 
 private val VFILTER_COLORS = listOf(
     listOf(Color(0xFF8EA1B8), Color(0xFF5B6B80)),
@@ -343,7 +347,7 @@ private fun LayerBar(
 @Composable
 private fun ToolButton(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
     Column(
-        Modifier.width(64.dp).alpha(if (enabled) 1f else 0.35f).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.width(64.dp).alpha(if (enabled) 1f else 0.35f).clickable(role = Role.Button, onClick = onClick).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(icon, label, tint = Color.White, modifier = Modifier.size(24.dp))
@@ -357,7 +361,7 @@ private fun SmallChip(text: String, selected: Boolean, enabled: Boolean = true, 
     Box(
         Modifier.alpha(if (enabled) 1f else 0.35f).clip(RoundedCornerShape(50))
             .background(if (selected) CapCyan else Color(0xFF2C2C30))
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) { Text(text, color = if (selected) Color.Black else Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
 }
@@ -378,7 +382,7 @@ private fun PanelSlider(label: String, value: Float, onChange: (Float) -> Unit) 
 private fun PanelHeader(title: String, onDone: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Icon(Icons.Rounded.Check, "Selesai", tint = CapCyan, modifier = Modifier.size(26.dp).clickable(onClick = onDone))
+        Icon(Icons.Rounded.Check, "Selesai", tint = CapCyan, modifier = Modifier.size(26.dp).clickable(role = Role.Button, onClick = onDone))
     }
 }
 
@@ -425,9 +429,28 @@ private fun TextPreview(
     }
 }
 
+/** Ubah error Transformer/encoder yang teknis menjadi pesan yang bisa ditindaklanjuti. */
+private fun exportErrorMessage(e: Throwable?): String {
+    if (e == null) return "Ekspor selesai tetapi video tidak bisa disimpan ke galeri (penyimpanan penuh atau izin ditolak)."
+    if (e is OutOfMemoryError) return "Ekspor gagal: memori tidak cukup. Coba resolusi lebih rendah atau potong video lebih pendek."
+    val chain = generateSequence(e) { it.cause }
+        .joinToString(" ") { it.javaClass.simpleName + " " + (it.message ?: "") }.lowercase()
+    val reason = when {
+        "encod" in chain -> "Encoder perangkat tidak mendukung kombinasi codec/resolusi ini. Coba resolusi lebih rendah."
+        "decod" in chain -> "Salah satu klip tidak bisa didekode oleh perangkat ini."
+        "mux" in chain -> "Gagal menulis berkas video."
+        "ioexception" in chain || "enospc" in chain || "no space" in chain ->
+            "Gagal membaca atau menulis berkas. Periksa ruang penyimpanan."
+        "frame" in chain && "process" in chain -> "Efek, teks, atau stiker gagal diproses. Coba hapus salah satunya."
+        else -> "Terjadi kesalahan saat memproses video."
+    }
+    return "Ekspor gagal. $reason"
+}
+
 private suspend fun saveVideoToGallery(ctx: Context, file: File): Boolean = withContext(Dispatchers.IO) {
+    var created: android.net.Uri? = null
     try {
-        val name = "SP_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".mp4"
+        val name = "Edit_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".mp4"
         val cv = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
@@ -435,13 +458,17 @@ private suspend fun saveVideoToGallery(ctx: Context, file: File): Boolean = with
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val uri = ctx.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cv) ?: return@withContext false
-        ctx.contentResolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
+        created = uri
+        val stream = ctx.contentResolver.openOutputStream(uri) ?: throw java.io.IOException("Tidak bisa membuka berkas tujuan")
+        stream.use { out -> file.inputStream().use { it.copyTo(out) } }
         cv.clear()
         cv.put(MediaStore.MediaColumns.IS_PENDING, 0)
         ctx.contentResolver.update(uri, cv, null, null)
         file.delete()
         true
     } catch (e: Throwable) {
+        // Jangan tinggalkan berkas setengah jadi di galeri.
+        created?.let { try { ctx.contentResolver.delete(it, null, null) } catch (_: Throwable) { } }
         false
     }
 }
@@ -469,6 +496,8 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
     var exportShort by remember { mutableIntStateOf(1080) }
     var exporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
+    var exportJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     val history = remember { mutableStateListOf<Snap>() }
     val future = remember { mutableStateListOf<Snap>() }
 
@@ -689,18 +718,36 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
     val selLayerObj = layers.firstOrNull { it.id == selLayer }
     val tlHeight = (18 + 66 + min(layers.size, 3) * 28 + 12).dp
 
-    CompositionLocalProvider(LocalContentColor provides Color.White) {
+    val edited = history.isNotEmpty()
+    val requestClose: () -> Unit = {
+        if (exporting) { /* sedang ekspor: gunakan tombol Batalkan */ }
+        else if (edited) { confirmDiscard = true }
+        else { onClose() }
+    }
+    BackHandler { requestClose() }
+    // Layar dijaga menyala saat ekspor agar proses tidak terhenti.
+    val hostView = LocalView.current
+    DisposableEffect(exporting) {
+        hostView.keepScreenOn = exporting
+        onDispose { hostView.keepScreenOn = false }
+    }
+
+    CompositionLocalProvider(LocalPalette provides PhotosDark, LocalContentColor provides Color.White) {
+        DarkSystemBars()
         Column(Modifier.fillMaxSize().background(CapBg).statusBarsPadding().navigationBarsPadding()) {
             // Bilah atas
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Rounded.Close, "Tutup", Modifier.size(28.dp).clickable(onClick = onClose))
+                Icon(
+                    Icons.Rounded.Close, "Tutup",
+                    Modifier.size(44.dp).clip(RoundedCornerShape(50)).clickable(role = Role.Button) { requestClose() }.padding(8.dp)
+                )
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier.clip(RoundedCornerShape(8.dp)).background(CapCyan)
-                        .clickable { if (clips.isEmpty()) toast("Timeline kosong") else showExport = true }
+                        .clickable(role = Role.Button) { if (clips.isEmpty()) toast("Timeline kosong") else showExport = true }
                         .padding(horizontal = 18.dp, vertical = 7.dp)
                 ) { Text("Ekspor", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
             }
@@ -962,6 +1009,16 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
         }
     }
 
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Buang perubahan?") },
+            text = { Text("Edit yang belum diekspor akan hilang. Video asli tidak terpengaruh.") },
+            confirmButton = { TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Buang", color = Destructive) } },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Lanjut mengedit") } }
+        )
+    }
+
     if (showPicker) {
         val videos = remember(vm.media) { vm.media.filter { it.isVideo } }
         AlertDialog(
@@ -1005,7 +1062,7 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                         Text("Durasi ${fmtT(total)} · disimpan ke Movies/Photos", fontSize = 12.sp)
                     } else {
                         LinearProgressIndicator(progress = { exportProgress }, modifier = Modifier.fillMaxWidth())
-                        Text("${(exportProgress * 100).roundToInt()}% — jangan tutup aplikasi", fontSize = 12.sp)
+                        Text("${(exportProgress * 100).roundToInt()}% — biarkan aplikasi tetap terbuka. Layar dijaga tetap menyala.", fontSize = 12.sp)
                     }
                 }
             },
@@ -1014,48 +1071,61 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                     exporting = true
                     exportProgress = 0f
                     playing = false
-                    scope.launch {
-                        val short = if (resolutionSupported(exportShort, vidAspect)) exportShort else 1080
+                    exportJob = scope.launch {
                         val out = File(ctx.cacheDir, "export_${System.currentTimeMillis()}.mp4")
-                        val plan = buildExportPlan(
-                            ctx, clips.toList(), layers.map { it.copy(endMs = min(it.endMs, total)) },
-                            adj, short, vidAspect
-                        )
-                        val error = suspendCancellableCoroutine<Throwable?> { cont ->
-                            val b = Transformer.Builder(ctx)
-                                .addListener(object : Transformer.Listener {
-                                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                                        if (cont.isActive) cont.resume(null)
-                                    }
+                        var saved = false
+                        try {
+                            val short = if (resolutionSupported(exportShort, vidAspect)) exportShort else 1080
+                            val plan = buildExportPlan(
+                                ctx, clips.toList(), layers.map { it.copy(endMs = min(it.endMs, total)) },
+                                adj, short, vidAspect
+                            )
+                            val error = suspendCancellableCoroutine<Throwable?> { cont ->
+                                val b = Transformer.Builder(ctx)
+                                    .addListener(object : Transformer.Listener {
+                                        override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                                            if (cont.isActive) cont.resume(null)
+                                        }
 
-                                    override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
-                                        if (cont.isActive) cont.resume(exportException)
+                                        override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                                            if (cont.isActive) cont.resume(exportException)
+                                        }
+                                    })
+                                plan.mime?.let { b.setVideoMimeType(it) }
+                                val t = b.build()
+                                cont.invokeOnCancellation { t.cancel() }
+                                t.start(plan.composition, out.absolutePath)
+                                scope.launch {
+                                    val holder = ProgressHolder()
+                                    while (cont.isActive) {
+                                        val st = t.getProgress(holder)
+                                        if (st == Transformer.PROGRESS_STATE_AVAILABLE) exportProgress = holder.progress / 100f
+                                        delay(200)
                                     }
-                                })
-                            plan.mime?.let { b.setVideoMimeType(it) }
-                            val t = b.build()
-                            cont.invokeOnCancellation { t.cancel() }
-                            t.start(plan.composition, out.absolutePath)
-                            scope.launch {
-                                val holder = ProgressHolder()
-                                while (cont.isActive) {
-                                    val st = t.getProgress(holder)
-                                    if (st == Transformer.PROGRESS_STATE_AVAILABLE) exportProgress = holder.progress / 100f
-                                    delay(200)
                                 }
                             }
-                        }
-                        if (error == null && saveVideoToGallery(ctx, out)) {
-                            toast("Video disimpan di Movies/Photos")
-                            exporting = false; showExport = false
-                            onSaved()
-                        } else {
-                            out.delete()
-                            toast("Ekspor gagal: ${error?.message ?: "tidak bisa menyimpan"}")
+                            if (error == null && saveVideoToGallery(ctx, out)) {
+                                saved = true
+                                toast("Video disimpan di Movies/Photos")
+                                showExport = false
+                                onSaved()
+                            } else {
+                                toast(exportErrorMessage(error))
+                            }
+                        } catch (e: CancellationException) {
+                            toast("Ekspor dibatalkan")
+                            throw e
+                        } catch (e: Throwable) {
+                            toast(exportErrorMessage(e))
+                        } finally {
+                            // Hapus berkas sementara bila tidak berhasil/dibatalkan, lalu pulihkan UI.
+                            if (!saved) out.delete()
                             exporting = false
+                            exportJob = null
                         }
                     }
                 }) { Text("Ekspor") }
+                else TextButton(onClick = { exportJob?.cancel() }) { Text("Batalkan ekspor", color = Destructive) }
             },
             dismissButton = { if (!exporting) TextButton(onClick = { showExport = false }) { Text("Batal") } }
         )
