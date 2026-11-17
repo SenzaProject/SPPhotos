@@ -3,6 +3,19 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Kunci penandatanganan: senzaproject.jks (PKCS12, alias "senzaproject").
+// Password TIDAK ditulis di kode: diambil dari environment / gradle.properties
+// (PHOTOS_KS_PASSWORD, dan PHOTOS_KEY_PASSWORD bila berbeda). Di GitHub Actions isi lewat Secrets.
+// Jika password belum diisi, build memakai keystore lama (spphotos.jks) supaya build tidak gagal.
+fun signingValue(name: String): String? =
+    (System.getenv(name) ?: (project.findProperty(name) as String?))?.takeIf { it.isNotBlank() }
+
+val newKeystore = file("senzaproject.jks")
+val newStorePass = signingValue("PHOTOS_KS_PASSWORD")
+val newKeyPass = signingValue("PHOTOS_KEY_PASSWORD") ?: newStorePass
+val useNewKeystore = newKeystore.exists() && newStorePass != null
+logger.lifecycle("Signing APK dengan: " + if (useNewKeystore) "senzaproject.jks" else "spphotos.jks (cadangan, password senzaproject.jks belum diisi)")
+
 android {
     namespace = "com.senza.spphotos"
     compileSdk = 34
@@ -19,10 +32,18 @@ android {
     // → update bisa dipasang langsung di atas versi sebelumnya tanpa "paket bentrok".
     signingConfigs {
         create("sp") {
-            storeFile = file("spphotos.jks")
-            storePassword = "spphotos123"
-            keyAlias = "spphotos"
-            keyPassword = "spphotos123"
+            if (useNewKeystore) {
+                storeFile = newKeystore
+                storeType = "pkcs12"
+                storePassword = newStorePass
+                keyAlias = "senzaproject"
+                keyPassword = newKeyPass
+            } else {
+                storeFile = file("spphotos.jks")
+                storePassword = "spphotos123"
+                keyAlias = "spphotos"
+                keyPassword = "spphotos123"
+            }
         }
     }
     buildTypes {

@@ -142,7 +142,7 @@ Status mengikuti `roadmap.md`:
 | 2 Sistem desain | DONE (belum dikompilasi; lihat catatan) — `DesignSystem.kt`: palet terang/gelap, skala tipe, Space/Radius/Motion, komponen SectionHeader/PillButton/GroupedCard; tema Material3 disambung ke token; fallback kaca ringan untuk perangkat RAM rendah |
 | 3 Navigasi & Library | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 3" di bawah |
 | 4 Collections, Albums, Search | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 4" di bawah |
-| 5 Viewer | TODO |
+| 5 Viewer | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 5" di bawah |
 | 6 Editor foto | TODO |
 | 7 Editor video | TODO |
 | 8 Settings & aksesibilitas | TODO |
@@ -187,3 +187,27 @@ Belum / catatan:
 - Pencarian tetap berbasis kata kunci (nama file, tanggal/bulan, album, jenis media, favorit); tidak ada pencarian objek/teks dalam gambar.
 - Layar "For You", Recent Days, dan Media Types masih memakai tata letak lama (hanya judul dan warna yang disamakan); polesan lebih lanjut ada di Tahap 9.
 - Operasi album, Recently Deleted (pulihkan / hapus permanen), dan search belum diuji di perangkat.
+
+### Tahap 5 — Viewer
+Dikerjakan:
+- **Geser ke bawah untuk menutup** foto (saat tidak di-zoom): foto mengecil, latar memudar memperlihatkan layar di belakang, bar tersembunyi saat menggeser. Gerak horizontal tetap untuk pager.
+- **Double-tap zoom** kini beranimasi dan menuju titik yang diketuk (bukan ke tengah); Reduce Motion memakai animasi singkat.
+- **Imersif**: bilah sistem ikut disembunyikan saat kontrol disembunyikan (geser dari tepi untuk memunculkan sementara); ikon bilah sistem dipaksa terang di atas hitam dan dikembalikan saat viewer ditutup.
+- **Tombol kembali** menutup panel Info lebih dulu.
+- **State error**: foto yang gagal didekode menampilkan pesan + "Buka dengan aplikasi lain" (sebelumnya layar kosong).
+- Dekode foto dibatasi 2560 px sisi terpanjang agar zoom tetap tajam tanpa memboroskan memori.
+- Panel Info menambah "Posisi" (n dari total), memakai token tipografi; tombol favorit berlabel jelas untuk TalkBack.
+- **Perbaikan regresi Tahap 2**: `Glass` / `GlassChip` sempat memakai warna dari tema sistem padahal layar seperti Viewer memaksa gaya gelap (teks bisa gelap di atas kaca gelap saat tema terang). Sekarang mengikuti `GlassStyle.dark`, dan Viewer menyediakan palet gelap.
+
+Belum / catatan:
+- Metadata EXIF (kamera, lensa, ISO, GPS) belum ada; butuh dependensi `androidx.exifinterface`.
+- Putar video memakai pemutar yang sama seperti sebelumnya (ExoPlayer + decoder cadangan); kontrol pemutar belum didesain ulang.
+- Geser-untuk-tutup hanya untuk foto, bukan video. Posisi viewer tidak dipulihkan setelah proses aplikasi dimatikan sistem.
+
+## Kunci penandatanganan (keystore)
+- `app/senzaproject.jks` (PKCS12, alias `senzaproject`) sudah ada di proyek. **Passwordnya sengaja tidak ada di kode.**
+- Isi di GitHub: repo → Settings → Secrets and variables → Actions → New repository secret:
+  - `PHOTOS_KS_PASSWORD` = password keystore
+  - `PHOTOS_KEY_PASSWORD` = password key (hanya jika berbeda dari password keystore)
+- Tanpa secret itu, build memakai keystore lama `spphotos.jks` (log Gradle menyebutkan mana yang dipakai).
+- **Penting:** APK yang ditandatangani `senzaproject.jks` tidak bisa menimpa aplikasi yang terpasang dengan tanda tangan lama. Perlu uninstall dulu, dan **favorit serta album buatan (disimpan di data aplikasi) akan hilang**.

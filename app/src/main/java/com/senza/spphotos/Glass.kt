@@ -116,9 +116,10 @@ fun Glass(
     val g = LocalGlass.current
     val blurred = (blur || behindBlur) && g.blur && !g.lite && LocalBackdrop.current != null && !g.reduced
     val ownRegion = blur && !behindBlur
-    val fg = PhotosTheme.colors.label
+    val pal = if (g.dark) PhotosDark else PhotosLight
+    val fg = pal.label
     val fill: Modifier = if (g.reduced) {
-        Modifier.background(PhotosTheme.colors.glassSolid, shape)
+        Modifier.background(pal.glassSolid, shape)
     } else {
         val scrim = if (g.dark) Color.Black.copy(alpha = if (blurred) 0.14f else 0.42f)
         else Color.White.copy(alpha = if (blurred) 0.12f else 0.35f)
@@ -181,7 +182,7 @@ fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mo
             .clip(shape)
             .background(
                 if (selected) Accent
-                else PhotosTheme.colors.fillSubtle
+                else (if (g.dark) PhotosDark else PhotosLight).fillSubtle
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -189,7 +190,7 @@ fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mo
     ) {
         Text(
             text, style = PhotosType.footnote.copy(fontWeight = FontWeight.Medium),
-            color = if (selected) Color.White else PhotosTheme.colors.label
+            color = if (selected) Color.White else (if (g.dark) PhotosDark else PhotosLight).label
         )
     }
 }

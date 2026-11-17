@@ -7,6 +7,9 @@
 
 package com.senza.spphotos
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.view.LayoutInflater
 import androidx.compose.runtime.DisposableEffect
@@ -21,7 +24,17 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.MediaController
 import android.widget.VideoView
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import kotlinx.coroutines.launch
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -82,24 +95,77 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 
+private fun Context.findActivity(): Activity? {
+    var c: Context = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+private fun openExternally(ctx: Context, m: Media) {
+    try {
+        ctx.startActivity(
+            Intent(Intent.ACTION_VIEW).setDataAndType(m.uri, m.mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        )
+    } catch (_: Exception) {
+    }
+}
+
+/**
+ * Halaman foto: pinch-zoom, double-tap zoom ke titik ketuk (beranimasi), geser vertikal ke bawah
+ * untuk menutup (saat tidak di-zoom), dan state error jika gambar tak bisa didekode.
+ */
 @Composable
-private fun ImagePage(m: Media, onTap: () -> Unit, onZoom: (Boolean) -> Unit) {
+private fun ImagePage(
+    m: Media,
+    reduce: Boolean,
+    onTap: () -> Unit,
+    onZoom: (Boolean) -> Unit,
+    onDragProgress: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var failed by remember(m.key) { mutableStateOf(false) }
+    // Dekode dibatasi 2560 px sisi terpanjang: cukup tajam saat di-zoom tanpa memboroskan memori pada foto raksasa.
+    val req = remember(m.key, m.dateMs) {
+        coil.request.ImageRequest.Builder(ctx).data(m.uri).size(2560, 2560).crossfade(false).build()
+    }
     Box(
         Modifier.fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onTap() },
-                    onDoubleTap = {
-                        if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 2.5f
-                        onZoom(scale > 1f)
+                    onDoubleTap = { tap ->
+                        val from = scale
+                        val o0 = offset
+                        val target = if (from > 1f) 1f else 2.5f
+                        val c = Offset(size.width / 2f, size.height / 2f)
+                        val raw = if (target > 1f) (tap - c) * (1f - target) else Offset.Zero
+                        val mx = size.width * (target - 1f) / 2f
+                        val my = size.height * (target - 1f) / 2f
+                        val o1 = Offset(raw.x.coerceIn(-mx, mx), raw.y.coerceIn(-my, my))
+                        scope.launch {
+                            animate(0f, 1f, animationSpec = Motion.snappy<Float>(reduce)) { t, _ ->
+                                scale = from + (target - from) * t
+                                offset = Offset(o0.x + (o1.x - o0.x) * t, o0.y + (o1.y - o0.y) * t)
+                            }
+                            onZoom(target > 1f)
+                        }
                     }
                 )
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
+                    var acc = Offset.Zero
+                    var dragging = false
                     do {
                         val ev = awaitPointerEvent()
                         if (ev.changes.size > 1 || scale > 1f) {
@@ -116,17 +182,43 @@ private fun ImagePage(m: Media, onTap: () -> Unit, onZoom: (Boolean) -> Unit) {
                             } else offset = Offset.Zero
                             onZoom(scale > 1f)
                             ev.changes.forEach { if (it.positionChanged()) it.consume() }
+                        } else {
+                            // Tidak di-zoom, satu jari: geser ke bawah = tutup (iOS). Gerak horizontal dibiarkan untuk pager.
+                            val pan = ev.calculatePan()
+                            acc += pan
+                            if (!dragging && acc.y > viewConfiguration.touchSlop && acc.y > kotlin.math.abs(acc.x) * 1.5f) dragging = true
+                            if (dragging) {
+                                dragY = (dragY + pan.y).coerceAtLeast(0f)
+                                onDragProgress((dragY / size.height).coerceIn(0f, 1f))
+                                ev.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
                         }
                     } while (ev.changes.any { it.pressed })
+                    if (dragging) {
+                        if (dragY > size.height * 0.18f) onDismiss()
+                        else { dragY = 0f; onDragProgress(0f) }
+                    }
                 }
             }
     ) {
-        AsyncImage(
-            model = m.uri, contentDescription = m.name, contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize().graphicsLayer(
-                scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y
+        if (failed) {
+            StateView(
+                Icons.Rounded.Info, "Gambar tidak bisa ditampilkan",
+                "Format tidak didukung atau file rusak.",
+                Modifier.align(Alignment.Center),
+                actionText = "Buka dengan aplikasi lain", onAction = { openExternally(ctx, m) }
             )
-        )
+        } else {
+            val shrink = 1f - (dragY / 1500f).coerceIn(0f, 0.25f)
+            AsyncImage(
+                model = req, contentDescription = m.name, contentScale = ContentScale.Fit,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize().graphicsLayer(
+                    scaleX = scale * shrink, scaleY = scale * shrink,
+                    translationX = offset.x, translationY = offset.y + dragY
+                )
+            )
+        }
     }
 }
 
@@ -208,8 +300,8 @@ private fun VideoPage(m: Media, current: Boolean, onTap: () -> Unit) {
 @Composable
 private fun InfoRow(k: String, v: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(k, fontSize = 13.sp, modifier = Modifier.weight(0.35f), color = LocalContentColor.current.copy(0.65f))
-        Text(v, fontSize = 13.sp, modifier = Modifier.weight(0.65f))
+        Text(k, style = PhotosType.footnote, modifier = Modifier.weight(0.35f), color = LocalContentColor.current.copy(0.65f))
+        Text(v, style = PhotosType.footnote, modifier = Modifier.weight(0.65f))
     }
 }
 
@@ -227,27 +319,64 @@ fun ViewerScreen(
     var chrome by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
     val cur = items[pager.currentPage.coerceIn(0, items.lastIndex)]
     val fav = cur.key in vm.favs
-    LaunchedEffect(pager.currentPage) { zoomed = false }
+    LaunchedEffect(pager.currentPage) { zoomed = false; dragProgress = 0f }
+
+    // Info terbuka: tombol kembali menutup panel info dulu, bukan seluruh viewer.
+    BackHandler(enabled = info) { info = false }
+
+    // Imersif: bilah sistem ikut disembunyikan saat kontrol disembunyikan; ikonnya terang di atas hitam.
+    val view = LocalView.current
+    val controller = remember(view) { view.context.findActivity()?.window?.let { WindowCompat.getInsetsController(it, view) } }
+    DisposableEffect(controller) {
+        val prevStatus = controller?.isAppearanceLightStatusBars ?: false
+        val prevNav = controller?.isAppearanceLightNavigationBars ?: false
+        controller?.isAppearanceLightStatusBars = false
+        controller?.isAppearanceLightNavigationBars = false
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+            controller?.isAppearanceLightStatusBars = prevStatus
+            controller?.isAppearanceLightNavigationBars = prevNav
+        }
+    }
+    LaunchedEffect(chrome, controller) {
+        if (chrome) controller?.show(WindowInsetsCompat.Type.systemBars())
+        else {
+            controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller?.hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    val showChrome = chrome && dragProgress < 0.02f
+    val fade = tween<Float>(if (vm.reduce) 0 else Motion.FADE_MS)
 
     CompositionLocalProvider(
-        LocalGlass provides GlassStyle(vm.glass, vm.reduce, true),
+        LocalPalette provides PhotosDark,
+        LocalGlass provides GlassStyle(vm.glass, vm.reduce, true, vm.blurOn, vm.refractOn, LocalGlass.current.lite),
         LocalContentColor provides Color.White
     ) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        // Latar memudar saat foto digeser turun, memperlihatkan layar di baliknya (seperti iOS).
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = (1f - dragProgress * 1.4f).coerceIn(0f, 1f)))) {
             HorizontalPager(
                 state = pager, modifier = Modifier.fillMaxSize(),
                 userScrollEnabled = !zoomed, key = { items[it].key }
             ) { page ->
                 val m = items[page]
                 if (m.isVideo) VideoPage(m, page == pager.currentPage) { chrome = !chrome }
-                else ImagePage(m, onTap = { chrome = !chrome }, onZoom = { if (page == pager.currentPage) zoomed = it })
+                else ImagePage(
+                    m, vm.reduce,
+                    onTap = { chrome = !chrome },
+                    onZoom = { if (page == pager.currentPage) zoomed = it },
+                    onDragProgress = { if (page == pager.currentPage) dragProgress = it },
+                    onDismiss = onClose
+                )
             }
 
-            AnimatedVisibility(chrome, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(showChrome, Modifier.align(Alignment.TopCenter), enter = fadeIn(fade), exit = fadeOut(fade)) {
                 Row(
-                    Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp),
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(Space.md),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -255,8 +384,8 @@ fun ViewerScreen(
                     Spacer(Modifier.weight(1f))
                     Glass(Modifier, RoundedCornerShape(22.dp)) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(formatDate(cur.dateMs, "d MMMM yyyy"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text(formatDate(cur.dateMs, "HH:mm"), fontSize = 11.sp)
+                            Text(formatDate(cur.dateMs, "d MMMM yyyy"), style = PhotosType.footnote.copy(fontWeight = FontWeight.SemiBold))
+                            Text(formatDate(cur.dateMs, "HH:mm"), style = PhotosType.caption2)
                         }
                     }
                     Spacer(Modifier.weight(1f))
@@ -264,13 +393,13 @@ fun ViewerScreen(
                 }
             }
 
-            AnimatedVisibility(info, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(info && dragProgress < 0.02f, Modifier.align(Alignment.BottomCenter), enter = fadeIn(fade), exit = fadeOut(fade)) {
                 Glass(
                     Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 96.dp),
                     RoundedCornerShape(28.dp)
                 ) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("Info", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Info", style = PhotosType.headline)
                         Spacer(Modifier.height(8.dp))
                         InfoRow("Nama", cur.name)
                         InfoRow("Tanggal", formatDate(cur.dateMs, "EEEE, d MMMM yyyy · HH:mm"))
@@ -282,18 +411,20 @@ fun ViewerScreen(
                         InfoRow("Jenis", cur.mime)
                         if (cur.isVideo) InfoRow("Durasi", formatDuration(cur.durationMs))
                         InfoRow("Album", cur.bucket)
+                        InfoRow("Posisi", "${pager.currentPage + 1} dari ${items.size}")
                     }
                 }
             }
 
-            AnimatedVisibility(chrome, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(showChrome, Modifier.align(Alignment.BottomCenter), enter = fadeIn(fade), exit = fadeOut(fade)) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
                     Glass(Modifier.fillMaxWidth().height(64.dp), RoundedCornerShape(32.dp)) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                             BarIcon(Icons.Rounded.Share, "Bagikan") { onShare(cur) }
                             BarIcon(
-                                if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Favorit",
-                                tint = if (fav) Color(0xFFFF375F) else Color.White
+                                if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                if (fav) "Hapus dari favorit" else "Tambah ke favorit",
+                                tint = if (fav) FavoritePink else Color.White
                             ) { vm.toggleFav(cur) }
                             BarIcon(Icons.Rounded.Tune, "Edit") { onEdit(cur) }
                             BarIcon(Icons.Rounded.Delete, "Hapus", tint = Destructive) { onDelete(cur) }
@@ -311,7 +442,7 @@ private fun BarIcon(
     tint: Color = Color.White, onClick: () -> Unit
 ) {
     Box(
-        Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick),
+        Modifier.size(52.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Icon(icon, desc, tint = tint, modifier = Modifier.size(26.dp)) }
 }
