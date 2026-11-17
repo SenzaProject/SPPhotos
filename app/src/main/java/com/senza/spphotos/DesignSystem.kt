@@ -1,5 +1,12 @@
 package com.senza.spphotos
 
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import android.content.ContextWrapper
+import android.content.Context
+import android.app.Activity
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -323,5 +330,33 @@ fun CoverCard(
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = Space.xs)
         )
         if (subtitle != null) Text(subtitle, style = PhotosType.caption1, color = c.secondaryLabel, maxLines = 1)
+    }
+}
+
+internal fun Context.findActivity(): Activity? {
+    var c: Context = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+/** Layar berlatar hitam paksa (editor): ikon bilah sistem dibuat terang, lalu dikembalikan saat layar ditutup. */
+@Composable
+fun DarkSystemBars() {
+    val view = LocalView.current
+    val controller = remember(view) {
+        view.context.findActivity()?.window?.let { WindowCompat.getInsetsController(it, view) }
+    }
+    DisposableEffect(controller) {
+        val prevStatus = controller?.isAppearanceLightStatusBars ?: false
+        val prevNav = controller?.isAppearanceLightNavigationBars ?: false
+        controller?.isAppearanceLightStatusBars = false
+        controller?.isAppearanceLightNavigationBars = false
+        onDispose {
+            controller?.isAppearanceLightStatusBars = prevStatus
+            controller?.isAppearanceLightNavigationBars = prevNav
+        }
     }
 }

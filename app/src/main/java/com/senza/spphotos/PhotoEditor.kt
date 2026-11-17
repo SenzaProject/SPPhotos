@@ -5,6 +5,16 @@
 
 package com.senza.spphotos
 
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.widget.Toast
@@ -204,7 +214,8 @@ private fun DrawScope.drawGlyph(kind: Int, c: Color) {
 @Composable
 private fun ToolCircle(kind: Int, value: Float, selected: Boolean, label: String, onClick: () -> Unit) {
     Column(
-        Modifier.width(68.dp).clickable(onClick = onClick).padding(vertical = 4.dp),
+        Modifier.width(68.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 4.dp)
+            .semantics(mergeDescendants = true) { this.selected = selected },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -250,7 +261,14 @@ private fun Dial(
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = if (abs(value) > 0.001f) IosYellow else Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Box(
-            Modifier.fillMaxWidth().height(46.dp).pointerInput(min, max) {
+            Modifier.fillMaxWidth().height(46.dp)
+                .semantics {
+                    contentDescription = "Penggeser nilai"
+                    stateDescription = label
+                    progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(min, max), min..max)
+                    setProgress { target -> onChange(target.coerceIn(min, max)); onFinish(); true }
+                }
+                .pointerInput(min, max) {
                 detectHorizontalDragGestures(
                     onDragEnd = { onFinish() },
                     onDragCancel = { onFinish() }
@@ -535,10 +553,17 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
 
     val edited = st != EditState()
 
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (edited) { confirmDiscard = true } else { onClose() } }
+    // Tombol kembali: bila ada perubahan belum disimpan, tanya dulu.
+    BackHandler(enabled = !saving) { requestClose() }
+
     CompositionLocalProvider(
-        LocalGlass provides GlassStyle(vm.glass, vm.reduce, true, vm.blurOn, vm.refractOn),
+        LocalPalette provides PhotosDark,
+        LocalGlass provides GlassStyle(vm.glass, vm.reduce, true, vm.blurOn, vm.refractOn, LocalGlass.current.lite),
         LocalContentColor provides Color.White
     ) {
+        DarkSystemBars()
         Column(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().navigationBarsPadding()) {
             // Bilah atas
             Row(
@@ -546,7 +571,7 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GlassIconButton(Icons.Rounded.Close, "Batal", onClose, size = 44, blur = false)
+                GlassIconButton(Icons.Rounded.Close, "Batal", { requestClose() }, size = 44, blur = false)
                 Spacer(Modifier.weight(1f))
                 GlassIconButton(Icons.Rounded.Undo, "Undo", { undo() }, size = 44, blur = false)
                 GlassIconButton(Icons.Rounded.Redo, "Redo", { redo() }, size = 44, blur = false)
@@ -556,14 +581,16 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier.clip(RoundedCornerShape(50)).background(IosYellow)
-                        .clickable(enabled = !saving) {
-                            scope.launch {
+                        .clickable(enabled = !saving, role = Role.Button) {
+                            if (!edited) onClose()
+                            else scope.launch {
                                 saving = true
                                 val ok = saveEdit(ctx, m, st)
                                 saving = false
+                                val note = if (maxOf(m.width, m.height) > 4096) " (maks. 4096 px)" else ""
                                 Toast.makeText(
                                     ctx,
-                                    if (ok) "Disimpan sebagai salinan di Pictures/Photos" else "Gagal menyimpan",
+                                    if (ok) "Disimpan sebagai salinan di Pictures/Photos$note" else "Gagal menyimpan",
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 if (ok) onSaved()
@@ -597,6 +624,16 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
                     )
                     else -> Image(r.second.asImageBitmap(), null, Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit)
                 }
+                if (compare) Text(
+                    "Original", style = PhotosType.caption2, color = Color.White,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp)
+                        .clip(RoundedCornerShape(50)).background(Color.Black.copy(0.55f))
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+                else if (edited && mode != 2 && r != null) Text(
+                    "Tahan gambar untuk membandingkan", style = PhotosType.caption2, color = IosGray,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)
+                )
             }
 
             // Panel alat
@@ -717,6 +754,17 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
             }
         }
 
+        if (confirmDiscard) {
+            AlertDialog(
+                onDismissRequest = { confirmDiscard = false },
+                title = { Text("Buang perubahan?") },
+                text = { Text("Edit yang belum disimpan akan hilang. Foto asli tidak terpengaruh.") },
+                confirmButton = {
+                    TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Buang", color = Destructive) }
+                },
+                dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Lanjut mengedit") } }
+            )
+        }
         if (saving) {
             AlertDialog(
                 onDismissRequest = {},

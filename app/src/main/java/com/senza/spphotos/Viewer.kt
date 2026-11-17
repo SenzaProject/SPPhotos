@@ -95,15 +95,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 
-private fun Context.findActivity(): Activity? {
-    var c: Context = this
-    while (c is ContextWrapper) {
-        if (c is Activity) return c
-        c = c.baseContext
-    }
-    return null
-}
-
 private fun openExternally(ctx: Context, m: Media) {
     try {
         ctx.startActivity(

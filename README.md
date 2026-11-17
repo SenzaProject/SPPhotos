@@ -143,7 +143,7 @@ Status mengikuti `roadmap.md`:
 | 3 Navigasi & Library | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 3" di bawah |
 | 4 Collections, Albums, Search | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 4" di bawah |
 | 5 Viewer | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 5" di bawah |
-| 6 Editor foto | TODO |
+| 6 Editor foto | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 6" di bawah |
 | 7 Editor video | TODO |
 | 8 Settings & aksesibilitas | TODO |
 | 9 Motion & Liquid Glass | TODO |
@@ -211,3 +211,23 @@ Belum / catatan:
   - `PHOTOS_KEY_PASSWORD` = password key (hanya jika berbeda dari password keystore)
 - Tanpa secret itu, build memakai keystore lama `spphotos.jks` (log Gradle menyebutkan mana yang dipakai).
 - **Penting:** APK yang ditandatangani `senzaproject.jks` tidak bisa menimpa aplikasi yang terpasang dengan tanda tangan lama. Perlu uninstall dulu, dan **favorit serta album buatan (disimpan di data aplikasi) akan hilang**.
+
+### Tahap 6 — Editor foto
+Editor lama sudah memiliki 15 adjustment, 10 filter + intensitas, crop/straighten/perspektif/rotasi/flip/rasio, before/after (tahan gambar), undo/redo, Auto, Revert, dan simpan sebagai salinan. Semuanya dipertahankan; antarmuka dasarnya (preview besar, Adjust/Filters/Crop, dial bergaya iOS) sudah sesuai arah desain, jadi tahap ini berfokus pada kebenaran hasil dan keamanan.
+
+Dikerjakan:
+- **Hasil ekspor kini sama dengan pratinjau.** Sharpness dan Noise Reduction memakai radius piksel tetap, padahal pratinjau 1280 px dan ekspor 4096 px, sehingga hasil simpan terlihat lebih halus dari yang dilihat saat mengedit. Radius sekarang diskalakan dengan resolusi (pratinjau tidak berubah).
+- **Penyimpanan lebih aman:** bila gagal menulis, berkas setengah jadi dihapus dari galeri; keberhasilan kompres diperiksa; bitmap perantara dilepas untuk menghemat memori.
+- **Foto asli tidak pernah ditimpa** (tetap salinan baru). Nama salinan diganti dari `SP_…` menjadi `Edit_…`.
+- **Buang perubahan?**: tombol X dan tombol kembali menampilkan konfirmasi bila ada edit yang belum disimpan. **Done** tanpa perubahan hanya menutup (tidak membuat salinan kembar).
+- Toast menyebut batas "maks. 4096 px" bila foto aslinya lebih besar.
+- Petunjuk "Tahan gambar untuk membandingkan" dan label "Original" saat membandingkan.
+- Aksesibilitas: dial punya nilai dan bisa diatur lewat TalkBack; tombol alat membawa status terpilih.
+- Palet gelap, gaya kaca konsisten, dan ikon bilah sistem terang di atas latar hitam.
+
+Belum / catatan:
+- Salinan hasil edit tidak membawa metadata EXIF asli (tanggal ambil, GPS, kamera); tanggalnya adalah waktu penyimpanan. Orientasi EXIF sudah ditangani saat decode (ImageDecoder), jadi foto tidak terputar salah.
+- Foto di atas 4096 px disimpan pada 4096 px (batas memori); format keluaran JPEG kualitas 95.
+- Perubahan yang belum disimpan tidak dipulihkan bila proses aplikasi dimatikan sistem.
+- Belum diuji di perangkat: kesesuaian pratinjau vs ekspor, undo/redo, dan salinan dapat dibuka di galeri.
+- Editor video masih menamai hasil `SP_…` (Tahap 7).

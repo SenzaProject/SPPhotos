@@ -237,9 +237,12 @@ fun processTone(src: Bitmap, st: EditState): Bitmap {
     val nr = a[A_NR]
     var out = px
     if (sh > 0.001f || df > 0.001f || nr > 0.001f) {
-        val fine = if (sh > 0.001f) boxBlur(px, w, h, 1) else null
+        // Radius diskalakan dengan resolusi (acuan 1280 px = ukuran pratinjau) agar hasil ekspor 4096 px
+        // terlihat sama dengan pratinjau; tanpa ini Sharpness/Noise Reduction jadi jauh lebih halus saat diekspor.
+        val k = max(w, h) / 1280f
+        val fine = if (sh > 0.001f) boxBlur(px, w, h, maxOf(1, Math.round(1f * k))) else null
         val coarse = if (df > 0.001f) boxBlur(px, w, h, max(4, min(w, h) / 70)) else null
-        val smooth = if (nr > 0.001f) boxBlur(px, w, h, 2) else null
+        val smooth = if (nr > 0.001f) boxBlur(px, w, h, maxOf(2, Math.round(2f * k))) else null
         out = IntArray(w * h)
         for (i in 0 until w * h) {
             val c = px[i]
@@ -365,12 +368,13 @@ fun decodeBitmap(ctx: Context, uri: Uri, maxSide: Int): Bitmap {
 
 /** Simpan hasil edit sebagai salinan baru; file asli tidak diubah. */
 suspend fun saveEdit(ctx: Context, m: Media, st: EditState): Boolean = withContext(Dispatchers.Default) {
+    var created: Uri? = null
     try {
         val base = decodeBitmap(ctx, m.uri, 4096)
         val toned = processTone(base, st)
         val full = applyGeometry(toned, st.geo)
         val out = cropGeometry(full, st.geo)
-        val name = "SP_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg"
+        val name = "Edit_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg"
         val cv = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
@@ -378,12 +382,18 @@ suspend fun saveEdit(ctx: Context, m: Media, st: EditState): Boolean = withConte
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val uri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv) ?: return@withContext false
-        ctx.contentResolver.openOutputStream(uri)?.use { out.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+        created = uri
+        val written = ctx.contentResolver.openOutputStream(uri)?.use { out.compress(Bitmap.CompressFormat.JPEG, 95, it) } ?: false
+        if (!written) throw java.io.IOException("Gagal menulis file")
         cv.clear()
         cv.put(MediaStore.MediaColumns.IS_PENDING, 0)
         ctx.contentResolver.update(uri, cv, null, null)
+        // Lepas memori bitmap perantara (sebagian bisa merupakan objek yang sama, jadi distinct()).
+        listOf(base, toned, full, out).distinct().forEach { if (!it.isRecycled) it.recycle() }
         true
     } catch (e: Throwable) {
+        // Jangan tinggalkan berkas setengah jadi di galeri bila penyimpanan gagal.
+        created?.let { try { ctx.contentResolver.delete(it, null, null) } catch (_: Throwable) { } }
         false
     }
 }
