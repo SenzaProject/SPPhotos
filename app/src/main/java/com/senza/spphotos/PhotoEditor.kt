@@ -560,7 +560,7 @@ fun EditorScreen(vm: GalleryVM, m: Media, onClose: () -> Unit, onSaved: () -> Un
 
     CompositionLocalProvider(
         LocalPalette provides PhotosDark,
-        LocalGlass provides GlassStyle(vm.glass, vm.reduce, true, vm.blurOn, vm.refractOn, LocalGlass.current.lite),
+        LocalGlass provides GlassStyle(vm.glass, vm.reduceEffective, true, vm.blurOn, vm.refractOn, LocalGlass.current.lite),
         LocalContentColor provides Color.White
     ) {
         DarkSystemBars()

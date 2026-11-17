@@ -94,7 +94,7 @@ fun SPTheme(vm: GalleryVM, content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme, typography = photosTypography()) {
         CompositionLocalProvider(
             LocalPalette provides pal,
-            LocalGlass provides GlassStyle(vm.glass, vm.reduce, dark, vm.blurOn, vm.refractOn, lite),
+            LocalGlass provides GlassStyle(vm.glass, vm.reduceEffective, dark, vm.blurOn, vm.refractOn, lite),
             LocalContentColor provides scheme.onBackground
         ) { content() }
     }

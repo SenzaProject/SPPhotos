@@ -145,7 +145,7 @@ Status mengikuti `roadmap.md`:
 | 5 Viewer | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 5" di bawah |
 | 6 Editor foto | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 6" di bawah |
 | 7 Editor video | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 7" di bawah |
-| 8 Settings & aksesibilitas | TODO |
+| 8 Settings & aksesibilitas | DONE sebagian (belum dikompilasi/diuji di perangkat) — lihat "Tahap 8" di bawah |
 | 9 Motion & Liquid Glass | TODO |
 | 10 QA & rilis | TODO |
 
@@ -248,3 +248,25 @@ Belum / catatan:
 - Penyusunan rencana ekspor (`buildExportPlan`) masih berjalan di thread utama sebelum ekspor dimulai; pada proyek dengan banyak teks/stiker bisa terasa sesaat tertahan.
 - Timeline, playhead, dan panel alat belum didesain ulang secara visual (hanya warna/token); kemampuan ekspor tetap bergantung pada encoder perangkat. Kombinasi codec/resolusi/fps di luar yang dicek `resolutionSupported` belum divalidasi.
 - Belum diuji di perangkat: ekspor menghasilkan berkas yang bisa diputar, durasi/sinkron audio, serta efek/transisi pada berkas hasil.
+
+### Tahap 8 — Settings, aksesibilitas, detail sistem
+Dikerjakan:
+- **Settings didesain ulang** dengan seksi bergaya iOS (Tampilan, Galeri, Penyimpanan, Galeri default, Privasi, Tentang) memakai token desain. Semua pengaturan lama dipertahankan: tema, intensitas kaca (kini dengan nilai %), Reduce Motion, blur latar, pembiasan lensa, kepadatan grid, ringkasan penyimpanan, status galeri default.
+- **Sakelar kini bisa diketuk di seluruh baris** dan terbaca TalkBack sebagai satu sakelar berlabel (sebelumnya hanya tombol Switch kecil tanpa label); slider kaca berlabel.
+- **Pembiasan lensa hanya tampil di Android 13+** (satu-satunya yang mendukung).
+- **Reduce Motion mengikuti sistem**: bila animasi sistem dimatikan di Pengaturan Android, efek Photos otomatis dikurangi (dan Settings menjelaskannya).
+- **Audit izin**: izin `INTERNET` dihapus karena tidak dipakai kode mana pun. Izin media (READ_MEDIA_IMAGES/VIDEO, READ_EXTERNAL_STORAGE ≤ Android 12) dan alur permintaan akses sudah diaudit di Tahap 3.
+- **Teks Privasi dikoreksi**: sebelumnya menyebut unduhan font/stiker dan pengenalan teks pada foto, yang tidak ada di aplikasi. Sekarang hanya menyatakan yang benar (diproses di perangkat, tanpa internet, tanpa pengenalan wajah, lokasi foto tidak dibaca, salinan hasil edit).
+- Versi di "Tentang" dibaca dari build (`versionName (versionCode)`), bukan teks tetap.
+
+**Fitur baru — pilihan fps ekspor video** (Asli, 30, 60, 90, 120 fps):
+- fps lebih rendah dari sumber dicapai dengan membuang frame (`FrameDropEffect`).
+- fps **di atas fps sumber tidak ditawarkan** (chip abu-abu): Photos tidak membuat frame baru, jadi memilih 120 fps pada video 30 fps hanya akan menghasilkan klip 30 fps. 90/120 fps hanya aktif bila video sumber memang 90/120 fps (mis. slow-motion) *dan* encoder perangkat mendukung ukuran+fps itu (`areSizeAndRateSupported`).
+- Bila fps sumber tidak terbaca, hanya "Asli" dan 30 fps yang tersedia.
+- Default "Asli" = perilaku lama (tanpa perubahan).
+
+Belum / catatan:
+- **Perlu verifikasi build**: `FrameDropEffect.createDefaultFrameDropEffect` dipakai berdasarkan pengetahuan API media3 1.3.1; jika kompilasi menolak, kirim lognya.
+- Font scaling besar (di atas 130%) belum diuji; beberapa kontrol berukuran tetap (mis. bilah navigasi 62dp) bisa terpotong. Navigasi keyboard tidak diaudit.
+- Audit dialog/menu lama (mis. dialog album, konfirmasi hapus, menu Collections) belum mengikuti token desain sepenuhnya.
+- Kontras: palet dan teks baru memakai token, tetapi belum diukur dengan alat kontras.

@@ -1,5 +1,6 @@
 package com.senza.spphotos
 
+import android.provider.Settings
 import android.app.Application
 import android.content.ContentUris
 import android.content.Context
@@ -196,6 +197,14 @@ class GalleryVM(app: Application) : AndroidViewModel(app) {
 
     var glass by mutableFloatStateOf(store.glass); private set
     var reduce by mutableStateOf(store.reduce); private set
+    /** true bila animasi sistem dimatikan (Pengaturan Android) — Photos ikut mengurangi efek. */
+    var systemReduce by mutableStateOf(false); private set
+    val reduceEffective: Boolean get() = reduce || systemReduce
+    fun refreshSystemReduce(ctx: Context) {
+        systemReduce = try {
+            Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        } catch (_: Throwable) { false }
+    }
     var theme by mutableIntStateOf(store.theme); private set
     var columns by mutableIntStateOf(store.columns); private set
     var blurOn by mutableStateOf(store.blur); private set

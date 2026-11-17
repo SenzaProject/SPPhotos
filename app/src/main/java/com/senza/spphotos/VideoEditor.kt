@@ -494,6 +494,7 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
     var showPicker by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var exportShort by remember { mutableIntStateOf(1080) }
+    var exportFps by remember { mutableIntStateOf(0) }
     var exporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var exportJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
@@ -522,6 +523,12 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                 try { r.release() } catch (_: Throwable) {}
             }
         }
+    }
+
+    // fps asli tertinggi di antara klip (0 = tidak terbaca); dipakai untuk membatasi pilihan fps ekspor.
+    val clipUris = clips.map { it.uri }
+    val sourceFps by produceState(0f, clipUris) {
+        value = withContext(Dispatchers.IO) { clipUris.maxOfOrNull { detectSourceFps(ctx, it) } ?: 0f }
     }
 
     val exo = remember {
@@ -1059,7 +1066,24 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                             }
                         }
                         Text("Resolusi yang abu-abu tidak didukung encoder perangkat ini. Menaikkan resolusi tidak menambah detail, dan 4K+ butuh waktu & memori besar.", fontSize = 11.sp)
-                        Text("Durasi ${fmtT(total)} · disimpan ke Movies/Photos", fontSize = 12.sp)
+                        Text("Frame rate", fontSize = 13.sp)
+                        val srcFps = if (sourceFps > 0f) sourceFps else 30f
+                        val selH = outHeightFor(exportShort, vidAspect)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FPS_OPTIONS.forEach { (f, label) ->
+                                val ok = remember(f, selH, vidAspect, srcFps) {
+                                    f == 0 || (f <= srcFps + 1.5f && fpsSupported(selH, vidAspect, f))
+                                }
+                                SmallChip(label, exportFps == f && ok, enabled = ok) { exportFps = f }
+                            }
+                        }
+                        Text(
+                            if (sourceFps > 0f) "Video sumber ±${sourceFps.roundToInt()} fps. fps di atas sumber tidak tersedia karena tidak menambah gerak; fps lebih rendah membuang frame sehingga file lebih kecil."
+                            else "fps asli video tidak terbaca, jadi hanya Asli dan 30 fps yang tersedia. fps yang abu-abu juga bisa karena encoder perangkat tidak mendukungnya.",
+                            fontSize = 11.sp
+                        )
+                        val fpsNow = if (exportFps > 0 && exportFps <= srcFps + 1.5f && fpsSupported(selH, vidAspect, exportFps)) exportFps else 0
+                        Text("Durasi ${fmtT(total)} · ${if (fpsNow == 0) "fps asli" else "$fpsNow fps"} · disimpan ke Movies/Photos", fontSize = 12.sp)
                     } else {
                         LinearProgressIndicator(progress = { exportProgress }, modifier = Modifier.fillMaxWidth())
                         Text("${(exportProgress * 100).roundToInt()}% — biarkan aplikasi tetap terbuka. Layar dijaga tetap menyala.", fontSize = 12.sp)
@@ -1076,9 +1100,12 @@ fun VideoEditorScreen(vm: GalleryVM, start: Media, onClose: () -> Unit, onSaved:
                         var saved = false
                         try {
                             val short = if (resolutionSupported(exportShort, vidAspect)) exportShort else 1080
+                            val srcFpsNow = if (sourceFps > 0f) sourceFps else 30f
+                            val fpsEff = if (exportFps > 0 && exportFps <= srcFpsNow + 1.5f &&
+                                fpsSupported(outHeightFor(short, vidAspect), vidAspect, exportFps)) exportFps else 0
                             val plan = buildExportPlan(
                                 ctx, clips.toList(), layers.map { it.copy(endMs = min(it.endMs, total)) },
-                                adj, short, vidAspect
+                                adj, short, vidAspect, fpsEff
                             )
                             val error = suspendCancellableCoroutine<Throwable?> { cont ->
                                 val b = Transformer.Builder(ctx)

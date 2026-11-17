@@ -2,6 +2,7 @@
 
 package com.senza.spphotos
 
+import androidx.media3.effect.FrameDropEffect
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -259,6 +260,59 @@ fun resolutionSupported(shortSide: Int, aspect: Float): Boolean {
     return encoderSupports(h, aspect, MimeTypes.VIDEO_H264) || encoderSupports(h, aspect, MimeTypes.VIDEO_H265)
 }
 
+/** Pilihan frame rate ekspor: 0 = ikuti video asli (tanpa perubahan). */
+val FPS_OPTIONS = listOf(0 to "Asli", 30 to "30 fps", 60 to "60 fps", 90 to "90 fps", 120 to "120 fps")
+
+/** Perkiraan fps asli sebuah klip; 0f bila tidak terbaca. */
+fun detectSourceFps(ctx: Context, uri: Uri): Float {
+    val r = android.media.MediaMetadataRetriever()
+    try {
+        r.setDataSource(ctx, uri)
+        val frames = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toFloatOrNull()
+        val dur = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toFloatOrNull()
+        if (frames != null && dur != null && dur > 0f && frames > 0f) return frames / (dur / 1000f)
+    } catch (_: Throwable) {
+    } finally {
+        try { r.release() } catch (_: Throwable) { }
+    }
+    // Cadangan: fps yang dilaporkan format trek video.
+    val ex = android.media.MediaExtractor()
+    try {
+        ex.setDataSource(ctx, uri, null)
+        for (i in 0 until ex.trackCount) {
+            val f = ex.getTrackFormat(i)
+            val isVideo = f.getString(android.media.MediaFormat.KEY_MIME)?.startsWith("video/") == true
+            if (isVideo && f.containsKey(android.media.MediaFormat.KEY_FRAME_RATE)) {
+                return try { f.getInteger(android.media.MediaFormat.KEY_FRAME_RATE).toFloat() }
+                catch (_: Throwable) { f.getFloat(android.media.MediaFormat.KEY_FRAME_RATE) }
+            }
+        }
+    } catch (_: Throwable) {
+    } finally {
+        try { ex.release() } catch (_: Throwable) { }
+    }
+    return 0f
+}
+
+/** Apakah encoder perangkat sanggup menulis [fps] pada tinggi keluaran ini (H.264 atau H.265). */
+fun fpsSupported(outH: Int, aspect: Float, fps: Int): Boolean {
+    if (fps <= 30) return true
+    val w = outWidthFor(outH, aspect)
+    fun ok(mime: String): Boolean = try {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            info.isEncoder && info.supportedTypes.any { it.equals(mime, true) } &&
+                try {
+                    info.getCapabilitiesForType(mime).videoCapabilities.areSizeAndRateSupported(w, outH, fps.toDouble())
+                } catch (_: Exception) {
+                    false
+                }
+        }
+    } catch (_: Throwable) {
+        false
+    }
+    return ok(MimeTypes.VIDEO_H264) || ok(MimeTypes.VIDEO_H265)
+}
+
 class ExportPlan(val composition: Composition, val mime: String?, val outH: Int)
 
 fun buildExportPlan(
@@ -267,7 +321,8 @@ fun buildExportPlan(
     layers: List<TLayer>,
     adj: VAdjust,
     shortSide: Int,
-    aspect: Float
+    aspect: Float,
+    fps: Int = 0
 ): ExportPlan {
     val outH = outHeightFor(shortSide, aspect)
     var startMs = 0L
@@ -276,6 +331,8 @@ fun buildExportPlan(
             if (c.speed != 1f) listOf(SonicAudioProcessor().apply { setSpeed(c.speed); setPitch(1f) }) else emptyList()
         val video = ArrayList<Effect>()
         if (c.speed != 1f) video.add(SpeedChangeEffect(c.speed))
+        // Batas frame rate keluaran: hanya membuang frame (tidak bisa menambah frame di atas fps sumber).
+        if (fps > 0) video.add(FrameDropEffect.createDefaultFrameDropEffect(fps.toFloat()))
         video.addAll(buildColorEffects(adj))
         val lenUs = c.lenMs * 1000L
         if (i > 0) {

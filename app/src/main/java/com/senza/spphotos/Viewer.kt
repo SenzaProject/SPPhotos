@@ -341,11 +341,11 @@ fun ViewerScreen(
     }
 
     val showChrome = chrome && dragProgress < 0.02f
-    val fade = tween<Float>(if (vm.reduce) 0 else Motion.FADE_MS)
+    val fade = tween<Float>(if (vm.reduceEffective) 0 else Motion.FADE_MS)
 
     CompositionLocalProvider(
         LocalPalette provides PhotosDark,
-        LocalGlass provides GlassStyle(vm.glass, vm.reduce, true, vm.blurOn, vm.refractOn, LocalGlass.current.lite),
+        LocalGlass provides GlassStyle(vm.glass, vm.reduceEffective, true, vm.blurOn, vm.refractOn, LocalGlass.current.lite),
         LocalContentColor provides Color.White
     ) {
         // Latar memudar saat foto digeser turun, memperlihatkan layar di baliknya (seperti iOS).
@@ -357,7 +357,7 @@ fun ViewerScreen(
                 val m = items[page]
                 if (m.isVideo) VideoPage(m, page == pager.currentPage) { chrome = !chrome }
                 else ImagePage(
-                    m, vm.reduce,
+                    m, vm.reduceEffective,
                     onTap = { chrome = !chrome },
                     onZoom = { if (page == pager.currentPage) zoomed = it },
                     onDragProgress = { if (page == pager.currentPage) dragProgress = it },

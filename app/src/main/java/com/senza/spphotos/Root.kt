@@ -6,6 +6,11 @@
 
 package com.senza.spphotos
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.navigationBarsPadding
 import android.app.Activity
 import android.app.PendingIntent
@@ -189,7 +194,7 @@ fun SPPhotosRoot(
     val activity = ctx as ComponentActivity
 
     DisposableEffect(activity) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.load() }
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) { vm.load(); vm.refreshSystemReduce(ctx) } }
         activity.lifecycle.addObserver(obs)
         onDispose { activity.lifecycle.removeObserver(obs) }
     }
@@ -208,7 +213,7 @@ fun SPPhotosRoot(
     val collState = rememberLazyListState()
     val backdropLayer = rememberGraphicsLayer()
     val backdrop = remember(backdropLayer) { BackdropState(backdropLayer) }
-    val backdropOn = vm.blurOn && !vm.reduce
+    val backdropOn = vm.blurOn && !vm.reduceEffective
     var pendingDelete by remember { mutableStateOf<List<Media>?>(null) }
     var albumDialog by remember { mutableStateOf(false) }
     var newAlbumDialog by remember { mutableStateOf(false) }
@@ -315,7 +320,7 @@ fun SPPhotosRoot(
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         CompositionLocalProvider(LocalBackdrop provides (if (backdropOn) backdrop else null)) {
-        key(searching, main) { TabEnter(vm.reduce) {
+        key(searching, main) { TabEnter(vm.reduceEffective) {
         when {
             searching -> SearchScreen(vm, selecting, selected, onTile, onLong)
             main == 0 -> LibraryScreen(
@@ -375,7 +380,7 @@ fun SPPhotosRoot(
 
         stack.forEachIndexed { i, o ->
             key(i) {
-                EnterAnim(vm.reduce) {
+                EnterAnim(vm.reduceEffective) {
                     when (o) {
                         is Overlay.Grid -> {
                             val list = remember(vm.media, vm.favs, vm.albums) { vm.media.filter(o.filter) }
@@ -489,90 +494,114 @@ fun SPPhotosRoot(
 
 // ---------------- Settings ----------------
 
+/** Seksi bergaya iOS: judul kecil di atas, isi di dalam kartu surface, keterangan opsional di bawah. */
 @Composable
-private fun SettingCard(title: String, content: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+private fun SettingSection(title: String, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    val c = PhotosTheme.colors
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title.uppercase(), style = PhotosType.caption1, color = c.secondaryLabel,
+            modifier = Modifier.padding(start = Space.lg, bottom = Space.xs)
+        )
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).background(c.surface).padding(Space.lg),
+            verticalArrangement = Arrangement.spacedBy(Space.md),
+            content = content
+        )
+        if (footer != null) Text(
+            footer, style = PhotosType.caption1, color = c.secondaryLabel,
+            modifier = Modifier.padding(start = Space.lg, end = Space.lg, top = Space.xs)
+        )
+    }
+}
+
+/** Baris sakelar: seluruh baris bisa diketuk dan dibaca TalkBack sebagai satu sakelar berlabel. */
+@Composable
+private fun SettingToggle(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val c = PhotosTheme.colors
+    Row(
+        Modifier.fillMaxWidth().minTouchTarget()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-        content()
+        Column(Modifier.weight(1f).padding(end = Space.md)) {
+            Text(title, style = PhotosType.body, color = c.label)
+            Text(desc, style = PhotosType.footnote, color = c.secondaryLabel)
+        }
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
 @Composable
 private fun StatRow(k: String, v: String) {
+    val c = PhotosTheme.colors
     Row(Modifier.fillMaxWidth()) {
-        Text(k, modifier = Modifier.weight(1f))
-        Text(v, color = MaterialTheme.colorScheme.onSurface.copy(0.7f))
+        Text(k, style = PhotosType.body, color = c.label, modifier = Modifier.weight(1f))
+        Text(v, style = PhotosType.body, color = c.secondaryLabel)
     }
 }
 
 @Composable
 fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
+    val c = PhotosTheme.colors
     val photos = vm.media.filter { !it.isVideo }
     val videos = vm.media.filter { it.isVideo }
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(c.background)) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(start = Space.lg, end = Space.lg, bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(Space.xl)
         ) {
             item {
                 Text(
-                    "Settings", fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                    "Settings", style = PhotosType.largeTitle, color = c.label,
                     modifier = Modifier.statusBarsPadding().padding(top = 72.dp, start = 4.dp)
                 )
             }
             item {
-                SettingCard("Tampilan") {
+                SettingSection("Tampilan") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Sistem", "Terang", "Gelap").forEachIndexed { i, n -> GlassChip(n, vm.theme == i, { vm.updateTheme(i) }) }
                     }
-                    Text("Intensitas kaca")
-                    Slider(value = vm.glass, onValueChange = { vm.updateGlass(it) }, valueRange = 0f..1f)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Kurangi efek")
-                            Text(
-                                "Kaca jadi solid dan animasi transisi dimatikan (hemat baterai / Reduce Motion).",
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
-                            )
+                    Column {
+                        Row(Modifier.fillMaxWidth()) {
+                            Text("Intensitas kaca", style = PhotosType.body, color = c.label, modifier = Modifier.weight(1f))
+                            Text("${Math.round(vm.glass * 100)}%", style = PhotosType.body, color = c.secondaryLabel)
                         }
-                        Switch(checked = vm.reduce, onCheckedChange = { vm.updateReduce(it) })
+                        Slider(
+                            value = vm.glass, onValueChange = { vm.updateGlass(it) }, valueRange = 0f..1f,
+                            modifier = Modifier.semantics { contentDescription = "Intensitas kaca" }
+                        )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Blur latar")
-                            Text(
-                                "Memburamkan foto di belakang bilah kaca. Matikan jika aplikasi terasa berat atau sering keluar sendiri.",
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
-                            )
-                        }
-                        Switch(checked = vm.blurOn, onCheckedChange = { vm.updateBlur(it) })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Pembiasan lensa (eksperimental)")
-                            Text(
-                                "Lensa membiaskan & memperbesar isi di bawahnya (Android 13+). Jika bermasalah, matikan.",
-                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
-                            )
-                        }
-                        Switch(checked = vm.refractOn, onCheckedChange = { vm.updateRefract(it) })
-                    }
+                    SettingToggle(
+                        "Kurangi efek",
+                        if (vm.systemReduce) "Animasi sistem sedang dimatikan, jadi efek otomatis dikurangi. Kaca solid dan transisi singkat."
+                        else "Kaca jadi solid dan animasi transisi dimatikan (hemat baterai / Reduce Motion).",
+                        vm.reduce
+                    ) { vm.updateReduce(it) }
+                    SettingToggle(
+                        "Blur latar",
+                        "Memburamkan foto di belakang bilah kaca. Matikan jika aplikasi terasa berat atau sering keluar sendiri.",
+                        vm.blurOn
+                    ) { vm.updateBlur(it) }
+                    // Hanya tampil jika perangkat mendukung (shader butuh Android 13+).
+                    if (Build.VERSION.SDK_INT >= 33) SettingToggle(
+                        "Pembiasan lensa (eksperimental)",
+                        "Lensa membiaskan dan memperbesar isi di bawahnya. Jika bermasalah, matikan.",
+                        vm.refractOn
+                    ) { vm.updateRefract(it) }
                 }
             }
             item {
-                SettingCard("Kepadatan grid (juga bisa pinch di grid)") {
+                SettingSection("Galeri", footer = "Kepadatan grid juga bisa diubah dengan mencubit (pinch) di grid.") {
+                    Text("Kolom per baris", style = PhotosType.body, color = c.label)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (3..8).forEach { c -> GlassChip("$c", vm.columns == c, { vm.updateColumns(c) }) }
+                        (3..8).forEach { n -> GlassChip("$n", vm.columns == n, { vm.updateColumns(n) }) }
                     }
                 }
             }
             item {
-                SettingCard("Penyimpanan") {
+                SettingSection("Penyimpanan") {
                     StatRow("Foto", "${photos.size} · ${formatBytes(photos.sumOf { it.size })}")
                     StatRow("Video", "${videos.size} · ${formatBytes(videos.sumOf { it.size })}")
                     StatRow("Total", formatBytes(vm.media.sumOf { it.size }))
@@ -582,13 +611,13 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
             item {
                 val sctx = LocalContext.current
                 var isDefault by remember { mutableStateOf(isDefaultGallery(sctx)) }
-                SettingCard("Galeri default") {
+                SettingSection("Galeri default") {
                     StatRow("Status", if (isDefault) "Photos ✓" else "Belum jadi default")
                     Text(
-                        "Agar foto & video dari file manager, chat, dan kamera terbuka di Photos: tekan \"Jadikan default\", " +
+                        "Agar foto dan video dari file manager, chat, dan kamera terbuka di Photos: tekan \"Jadikan default\", " +
                             "pilih Photos lalu \"Selalu\". Jika yang terbuka aplikasi galeri lain, buka \"Pengaturan\" → " +
                             "Aplikasi default / Kelola aplikasi → galeri lama → hapus pengaturan default, lalu ulangi.",
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
+                        style = PhotosType.footnote, color = c.secondaryLabel
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         GlassChip("Jadikan default", false, { openAsDefault(sctx, vm.media.firstOrNull { !it.isVideo }?.uri) })
@@ -598,21 +627,21 @@ fun SettingsScreen(vm: GalleryVM, onBack: () -> Unit) {
                 }
             }
             item {
-                SettingCard("Privasi") {
+                SettingSection("Privasi") {
                     Text(
-                        "Foto & video diproses di perangkat. Aplikasi tidak memakai pengenalan wajah dan tidak membaca lokasi foto. " +
-                            "Internet hanya dipakai jika kamu mengunduh font atau stiker tambahan (bisa dipakai offline setelah diunduh). " +
-                            "Pengenalan teks pada foto berjalan di perangkat. Favorit dan album kustom disimpan lokal.",
-                        fontSize = 14.sp
+                        "Foto dan video hanya diproses di perangkat. Photos tidak memakai koneksi internet, tidak memakai " +
+                            "pengenalan wajah, dan tidak membaca lokasi foto. Favorit dan album buatan disimpan lokal di perangkat. " +
+                            "Hasil edit disimpan sebagai salinan baru; file asli tidak diubah.",
+                        style = PhotosType.footnote, color = c.label
                     )
                 }
             }
             item {
-                SettingCard("Tentang") {
-                    StatRow("Photos", "v2.0")
+                SettingSection("Tentang") {
+                    StatRow("Photos", "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                     Text(
                         "Konsep UI mengacu pada dokumen “iOS 27 Photos · Liquid Glass”. Bukan produk atau tampilan resmi Apple.",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
+                        style = PhotosType.caption1, color = c.secondaryLabel
                     )
                 }
             }
